@@ -301,3 +301,13 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Tahoma,s
 .media-use-row small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
 .media-use-row .btn{flex-shrink:0}
 @media(max-width:520px){.media-use-row{align-items:stretch;flex-direction:column}.media-use-row .btn{align-self:flex-start}}
+
+.upload-area{display:grid;gap:6px;width:100%;font:inherit}
+.upload-area.dragging,.upload-area:focus-visible{border-color:var(--accent);background:var(--panel)}
+.upload-area>*{pointer-events:none}
+.media-checklist{grid-template-columns:minmax(0,1fr)}
+.project-media-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
+.project-media-row label{min-width:0;overflow-wrap:anywhere}
+.project-media-order{display:flex;gap:5px;flex-shrink:0}
+.project-media-order[hidden]{display:none}
+.project-media-order button:disabled{opacity:.4;cursor:default}

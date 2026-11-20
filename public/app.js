@@ -39,7 +39,8 @@ function save(){
  const snapshot=JSON.stringify(db);
  lastSave=lastSave.catch(()=>{}).then(async()=>{
    await api('/api/admin/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:snapshot});
- }).catch(err=>{console.error(err);toast('Save failed: '+err.message)});
+   return true;
+ }).catch(err=>{console.error(err);toast('Save failed: '+err.message);return false});
  return true;
 }
 async function optimizeUploadImage(file){
@@ -215,7 +216,7 @@ case 'skills':return `${dh('Profile / Expertise','Skills Manager','Edit hard-ski
 case 'offers':return `${dh('Clients / Commercial','Offers','Flexible proposals with clear conditions.',`<button class="btn primary sm" data-action="new-offer">+ New offer</button>`)}<div class="offer-admin-grid">${db.offers.map(o=>`<div class="panel offer-admin"><div class="panel-header"><h3>${esc(o.title)}</h3>${badge(o.active?'Active':'Hidden',!o.active)}</div><p class="sub small">${esc(o.description)}</p><p class="muted micro">${esc(o.terms)}</p><div class="hero-ctas"><button class="btn sm" data-action="edit-offer" data-id="${esc(o.id)}">Edit</button><button class="btn sm" data-action="toggle-offer" data-id="${esc(o.id)}">${o.active?'Hide':'Publish'}</button><button class="btn sm danger" data-action="delete-offer" data-id="${esc(o.id)}">Delete</button></div></div>`).join('')}</div>`;
 case 'sections':return `${dh('Site / Layout','Sections & layout','Create custom content blocks, choose layout, reorder and publish.',`<button class="btn primary sm" data-action="new-custom-section">+ Custom section</button>`)}<div class="panel"><div class="panel-header"><h3>Homepage section order</h3>${badge('Drag-free ordering')}</div><div class="sortable-list">${db.sectionsOrder.map((k,i)=>`<div class="sortable-row"><div class="sort-grip">☷</div><div class="sort-name"><b>${esc(sectionName(k))}</b><span>${db.customSections.some(x=>x.id===k)?'Flexible section · '+esc(db.customSections.find(x=>x.id===k).layout):'Core section'} · ${i+1} / ${db.sectionsOrder.length}</span></div>${orderButtons('section',k,i,db.sectionsOrder.length)}${db.customSections.some(x=>x.id===k)?`<div class="table-actions"><button data-action="edit-custom-section" data-id="${esc(k)}">Edit</button><button data-action="delete-custom-section" data-id="${esc(k)}">Delete</button></div>`:''}<label class="toggle-switch"><input type="checkbox" data-section="${esc(k)}" ${db.sections[k]?'checked':''}><span>${db.sections[k]?'Visible':'Hidden'}</span></label></div>`).join('')}</div><p class="sub micro">Sections with sample content are clearly labeled. Edit or hide them before publishing.</p></div><div class="panel"><div class="panel-header"><h3>Flexible sections & content</h3><button class="btn sm primary" data-action="new-custom-section">+ Create</button></div><div class="custom-admin-grid">${db.customSections.map(x=>`<article class="custom-admin-card"><span class="eyebrow">${esc(x.layout.toUpperCase())} · ${x.items.length} items</span><h3>${esc(x.title)}</h3><p class="sub small">${esc(x.description||'')}</p><div class="table-actions"><button data-action="edit-custom-section" data-id="${esc(x.id)}">Edit section</button><button data-action="new-custom-item" data-id="${esc(x.id)}">+ Add item</button></div><div class="custom-item-list">${x.items.map((it,i)=>`<div class="custom-item-row"><b>${esc(it.title)}</b><div class="table-actions">${orderButtons('custom-item',x.id+'|'+it.id,i,x.items.length)}<button data-action="edit-custom-item" data-id="${esc(x.id+'|'+it.id)}">Edit</button><button data-action="delete-custom-item" data-id="${esc(x.id+'|'+it.id)}">✕</button></div></div>`).join('')}</div></article>`).join('')}</div></div>`;
 case 'certificates':return `${dh('Credentials / Training','Certificates','Add certificate cover images and adjust their order.',`<button class="btn primary sm" data-action="new-cert">+ New certificate</button>`)}<div class="panel"><div class="table-scroll"><table class="table"><thead><tr><th>Order</th><th>Preview</th><th>Certificate</th><th>Issuer</th><th>Year</th><th>Actions</th></tr></thead><tbody>${db.certificates.map((c,i)=>`<tr><td>${orderButtons('certificates',c.id,i,db.certificates.length)}</td><td><img class="admin-cert-preview" src="${esc(c.image||certificateMock(c,i))}" alt="Certificate"></td><td><b>${esc(c.title)}</b></td><td>${esc(c.issuer)}</td><td>${esc(c.year)}</td><td><div class="table-actions"><button data-action="edit-cert" data-id="${esc(c.id)}">Edit / Image</button><button data-action="delete-cert" data-id="${esc(c.id)}">Delete</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
-case 'media':return `${dh('Assets / Storage','Media Library','Upload image or short video. Assign assets to projects in Edit Project.',`<button class="btn primary sm" data-action="upload">+ Upload</button>`)}<div class="upload-area" data-action="upload"><div style="font-size:32px">⇧</div><strong>Choose images, PDFs or short videos</strong><div class="small">Files are stored in Cloudflare R2 and will remain after a refresh.</div></div><input id="media-input" type="file" accept="image/*,video/*,.pdf" multiple hidden><div class="media-grid">${db.media.map(m=>`<div class="media-item"><div class="media-visual" data-action="preview-media" data-id="${esc(m.id)}" role="button" tabindex="0" aria-label="Preview ${esc(m.name)}">${m.type.startsWith('image/')?`<img src="${esc(m.src)}" alt="${esc(m.name)}">`:m.type.startsWith('video/')?`<video src="${esc(m.src)}" muted preload="metadata" playsinline></video><span class="media-play-icon">▶</span>`:m.type==='application/pdf'?'<span class="media-pdf-icon">PDF</span>':'▧'}</div><div class="info"><b>${esc(m.name)}</b><p class="muted micro">${esc(m.type)}</p><div class="table-actions"><button class="btn sm" data-action="preview-media" data-id="${esc(m.id)}">Preview ↗</button>${m.type.startsWith('image/')?`<button class="btn sm" data-action="edit-media-alt" data-id="${esc(m.id)}">ALT text</button>`:''}<button class="btn sm danger" data-action="delete-media" data-id="${esc(m.id)}">Delete</button></div></div></div>`).join('')}</div>`;
+case 'media':return `${dh('Assets / Storage','Media Library','Upload files and assign them to projects in Edit Project.',`<button class="btn primary sm" data-action="upload">+ Upload</button>`)}<button type="button" class="upload-area" id="media-drop-zone" data-action="upload"><strong>Drop files here or click to browse</strong><span class="small">Images, videos, PDFs, JSON or text files. Up to 90 MiB per file.</span></button><input id="media-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,video/mp4,video/webm,.pdf,.json,.txt" multiple hidden><div class="media-grid">${db.media.map(m=>`<div class="media-item"><div class="media-visual" data-action="preview-media" data-id="${esc(m.id)}" role="button" tabindex="0" aria-label="Preview ${esc(m.name)}">${m.type.startsWith('image/')?`<img src="${esc(m.src)}" alt="${esc(m.name)}">`:m.type.startsWith('video/')?`<video src="${esc(m.src)}" muted preload="metadata" playsinline></video><span class="media-play-icon">▶</span>`:m.type==='application/pdf'?'<span class="media-pdf-icon">PDF</span>':'▧'}</div><div class="info"><b>${esc(m.name)}</b><p class="muted micro">${esc(m.type)}</p><div class="table-actions"><button class="btn sm" data-action="preview-media" data-id="${esc(m.id)}">Preview ↗</button>${m.type.startsWith('image/')?`<button class="btn sm" data-action="edit-media-alt" data-id="${esc(m.id)}">ALT text</button>`:''}<button class="btn sm danger" data-action="delete-media" data-id="${esc(m.id)}">Delete</button></div></div></div>`).join('')}</div>`;
 case 'inbox':return `${dh('Contact / Messages','Inbox','Messages submitted through the live contact form.')}<div>${db.messages.length?db.messages.map(m=>`<div class="message-card"><div class="message-head"><div><strong>${esc(m.name)}</strong><p class="sub small">${esc(m.email)}</p></div>${badge(m.read?'Read':'Unread',m.read)}</div><p class="sub">${esc(m.message)}</p><button class="btn sm" data-action="toggle-read" data-id="${esc(m.id)}">Mark ${m.read?'unread':'read'}</button></div>`).join(''):'<div class="empty">No messages.</div>'}</div>`;
 case 'analytics':return analyticsDashboard();
 case 'settings':return `${dh('Workspace / Preferences','Settings','Brand identity, languages and preview controls.')}<div class="panel"><h3>Brand logo & tab icon</h3><p class="sub small">Upload your own logo and favicon (PNG, JPEG or WebP). If the favicon is missing, the logo is used as its fallback.</p><div class="brand-admin-grid"><div class="brand-upload"><div class="brand-preview">${db.brand.logo?`<img src="${esc(db.brand.logo)}" alt="">`:`${brandMark()}`}</div><b>Portfolio logo</b><input type="file" id="brand-logo-input" accept="image/png,image/jpeg,image/webp" hidden><div class="table-actions"><button class="btn sm primary" data-action="upload-brand-logo">Upload</button><button class="btn sm" data-action="clear-brand-logo">Remove</button></div></div><div class="brand-upload"><div class="brand-preview">${db.brand.favicon?`<img src="${esc(db.brand.favicon)}" alt="Favicon">`:db.brand.logo?`<img src="${esc(db.brand.logo)}" alt="Fallback favicon">`:'<span class="brand-mark">M.</span>'}</div><b>Browser tab icon</b><input type="file" id="brand-favicon-input" accept="image/png,image/jpeg,image/webp" hidden><div class="table-actions"><button class="btn sm primary" data-action="upload-brand-favicon">Upload</button><button class="btn sm" data-action="clear-brand-favicon">Remove</button></div></div></div></div><div class="panel"><h3>Professional identity & project filters</h3><p class="sub small">Choose how you describe yourself; categories are derived from published projects, so no empty categories appear. In Edit Project, add new tracks separated by commas.</p><form id="portfolio-preferences-form"><div class="field"><label>Main professional descriptor</label><input name="focus" value="${esc(db.settings.focus)}" placeholder="e.g. Software & Systems Engineer"></div><div class="field"><label>Default project filter</label><select name="defaultTrack">${['All',...new Set(db.projects.filter(p=>p.published).flatMap(p=>p.tracks||[]).map(x=>x.trim()).filter(Boolean))].map(x=>`<option value="${esc(x)}" ${(db.settings.defaultTrack||'All')===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div><button class="btn primary" type="submit">Save preferences ✓</button></form></div><div class="panel"><h3>Homepage SEO · Search appearance</h3><p class="sub small">Edit the search title and description used by your portfolio. Leave a field blank to use the existing page content.</p><form id="seo-home-form">
@@ -278,7 +279,7 @@ case 'project':{
  <div class="form-grid">${textField('status','Status (Completed / In progress)',p?.status||'Completed')}<div class="field"><label>Fallback visual theme (when no project image exists)</label><select name="tone">${[['blue','Blue'],['gold','Gold'],['rose','Rose'],['violet','Violet']].map(([v,l])=>`<option value="${v}" ${(p?.tone||'blue')===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
  <div class="form-grid">${textField('github','GitHub URL (optional)',p?.github)}${textField('demo','Live demo URL (optional)',p?.demo)}</div>
  <div class="panel"><h3>More project links</h3><p class="field-help">One per line: Label | URL. Examples: Contact client | mailto:client@example.com, Technical documentation | https://...</p>${tagField('links','Label | URL',(p?.links||[]).map(x=>x.label+' | '+x.url),'newline')}</div>
- <div class="panel"><h3>Project gallery</h3><p class="field-help">Choose images/videos displayed in the vertical gallery. The cover image is managed separately above.</p><div class="media-checklist">${db.media.map(m=>`<label class="inline-checkbox"><input type="checkbox" name="mediaIds" value="${esc(m.id)}" ${(p?.mediaIds||[]).includes(m.id)?'checked':''}>${esc(m.name)}</label>`).join('')||'<span class="muted small">Upload images or videos from Media Library first.</span>'}</div></div>
+ <div class="panel"><h3>Project gallery</h3><p class="field-help">Select files and use ↑ or ↓ to change their order. The cover appears first.</p><div class="media-checklist">${projectMediaRows(p?.mediaIds||[])}</div></div>
  <div class="check-row"><label><input name="published" type="checkbox" ${p?.published?'checked':''}> Published — visible to visitors and included in sitemap</label><label><input name="featured" type="checkbox" ${p?.featured?'checked':''}> Featured — prioritized in the homepage selected work (not a separate page)</label></div>
  <div class="hero-ctas"><button class="btn primary" type="submit">Save project ✓</button><button class="btn" type="button" data-action="close-modal">Cancel</button></div></form>`;
  break;
@@ -286,6 +287,48 @@ case 'project':{
 }
 return `<div class="overlay"><div class="dialog" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="dialog-head"><h2>${esc(title)}</h2><button class="round" data-action="close-modal" aria-label="Close">✕</button></div>${content}</div></div>`}
 function cleanUrl(u){try{const v=new URL(u);return ['https:','http:','mailto:','tel:'].includes(v.protocol)?v.toString():'#'}catch{return '#'}}
+function projectMediaRow(id,name,checked,first=false,last=false){
+ return `<div class="project-media-row"><label class="inline-checkbox"><input type="checkbox" name="mediaIds" value="${esc(id)}" ${checked?'checked':''}>${esc(name)}</label><div class="project-media-order" ${checked?'':'hidden'}><button class="btn sm" type="button" data-action="move-project-media" data-direction="up" aria-label="Move ${esc(name)} up" ${first?'disabled':''}>↑</button><button class="btn sm" type="button" data-action="move-project-media" data-direction="down" aria-label="Move ${esc(name)} down" ${last?'disabled':''}>↓</button></div></div>`;
+}
+function projectMediaRows(ids){
+ const selected=[...new Set(ids)];
+ const media=new Map(db.media.map(item=>[item.id,item.name]));
+ return selected.map((id,index)=>projectMediaRow(id,media.get(id)||'Unavailable media',true,index===0,index===selected.length-1)).join('')+
+  [...media].filter(([id])=>!selected.includes(id)).map(([id,name])=>projectMediaRow(id,name,false)).join('');
+}
+function refreshProjectMediaButtons(list){
+ const rows=Array.from(list.querySelectorAll('.project-media-row')).filter(row=>row.querySelector('input').checked);
+ rows.forEach((row,index)=>{
+  row.querySelector('[data-direction="up"]').disabled=index===0;
+  row.querySelector('[data-direction="down"]').disabled=index===rows.length-1;
+ });
+}
+let libraryUploadInProgress=false;
+async function uploadToMediaLibrary(files){
+ if(!files.length||!ui.authenticated)return;
+ if(libraryUploadInProgress){toast('Wait for the current upload to finish');return}
+ libraryUploadInProgress=true;
+ const session=adminToken;
+ let uploaded=0;
+ const failures=[];
+ toast(`Uploading ${files.length} file(s)…`);
+ try{
+  for(const file of files){
+   if(adminToken!==session)break;
+   try{
+    const item=await uploadMedia(file);
+    if(adminToken!==session)break;
+    db.media.unshift(item);
+    uploaded++;
+    save();
+   }catch(err){failures.push(`${file.name}: ${err.message}`)}
+  }
+  const saved=uploaded ? await lastSave : true;
+  if(adminToken!==session||!saved)return;
+  if(uploaded&&ui.tab==='media'&&!ui.modal)render(true);
+  toast(failures.length?`${uploaded} uploaded, ${failures.length} failed. ${failures[0]}`:`${uploaded} media file(s) uploaded`);
+ }finally{libraryUploadInProgress=false}
+}
 function mediaDeleteDialog(){
  const warning=ui.mediaDeleteWarning;if(!warning)return '';
  const m=db.media.find(x=>x.id===warning.id);
@@ -426,6 +469,15 @@ case 'new-soft-skill':ui.modal='soft-skill';ui.modalId=null;render(true);break;
 case 'edit-soft-skill':ui.modal='soft-skill';ui.modalId=id;render(true);break;
 case 'delete-soft-skill':db.softSkills=db.softSkills.filter(s=>s.id!==id);save();render(true);break;
 case 'upload':$('#media-input')?.click();break;
+case 'move-project-media':{
+ const row=el.closest('.project-media-row'),list=row.parentElement;
+ const up=d.direction==='up',neighbor=up?row.previousElementSibling:row.nextElementSibling;
+ if(!neighbor?.querySelector('input').checked)break;
+ if(up)neighbor.before(row);else neighbor.after(row);
+ refreshProjectMediaButtons(list);
+ if(el.disabled)row.querySelector(`[data-direction="${up?'down':'up'}"]`).focus();else el.focus();
+ break;
+}
 case 'portrait-upload':$('#portrait-input')?.click();break;
 case 'portrait-remove':db.hero.portrait='';save();render(true);break;
 case 'delete-media':{const m=db.media.find(x=>x.id===id);if(!m || ui.mediaDeleteBusy)break;
@@ -471,7 +523,42 @@ document.addEventListener('keydown',ev=>{
 document.addEventListener('paste',ev=>{const input=ev.target.closest('.tag-entry');if(!input)return;const text=ev.clipboardData?.getData('text')||'';if(/[\n,]/.test(text)&&input.closest('.tag-editor').dataset.delimiter==='comma'||/\n/.test(text)){ev.preventDefault();addTags(input.closest('.tag-editor'),text)}});
 document.addEventListener('focusout',ev=>{const input=ev.target.closest('.tag-entry');if(input?.value)addTags(input.closest('.tag-editor'),input.value)});
 document.addEventListener('input',ev=>{if(ev.target.id==='project-filter'){ui.search=ev.target.value;$('#projects-table').innerHTML=tableProjects(db.projects.filter(x=>(x.title+' '+(x.tracks||[]).join(' ')).toLowerCase().includes(ui.search.toLowerCase())))}});
-document.addEventListener('change',async ev=>{const x=ev.target;if(x.id==='custom-media-select'&&x.value){const f=$('#custom-item-form [name=image]');if(f)f.value=x.value}if(x.matches('[data-section]')){db.sections[x.dataset.section]=x.checked;save();render(true)}if(x.id==='project-cover-select'){
+document.addEventListener('dragover',ev=>{
+ const zone=$('#media-drop-zone');
+ if(!zone||!ev.dataTransfer?.types.includes('Files'))return;
+ ev.preventDefault();
+ const overZone=zone.contains(ev.target);
+ ev.dataTransfer.dropEffect=overZone?'copy':'none';
+ zone.classList.toggle('dragging',overZone);
+});
+document.addEventListener('dragleave',ev=>{
+ const zone=$('#media-drop-zone');
+ if(zone?.contains(ev.target)&&!zone.contains(ev.relatedTarget))zone.classList.remove('dragging');
+});
+document.addEventListener('drop',ev=>{
+ const zone=$('#media-drop-zone'),files=Array.from(ev.dataTransfer?.files||[]);
+ if(!zone||!ev.dataTransfer?.types.includes('Files'))return;
+ ev.preventDefault();
+ zone.classList.remove('dragging');
+ if(zone.contains(ev.target))void uploadToMediaLibrary(files);
+});
+document.addEventListener('change',async ev=>{const x=ev.target;
+ if(x.matches('#project-form input[name="mediaIds"]')){
+  const row=x.closest('.project-media-row'),list=row.parentElement;
+  const firstUnchecked=[...list.children].find(item=>item!==row&&!item.querySelector('input').checked);
+  if(x.checked&&firstUnchecked)firstUnchecked.before(row);else list.append(row);
+  row.querySelector('.project-media-order').hidden=!x.checked;
+  refreshProjectMediaButtons(list);
+  x.focus();
+  return;
+ }
+ if(x.id==='media-input'){
+  const files=Array.from(x.files);
+  x.value='';
+  await uploadToMediaLibrary(files);
+  return;
+ }
+ if(x.id==='custom-media-select'&&x.value){const f=$('#custom-item-form [name=image]');if(f)f.value=x.value}if(x.matches('[data-section]')){db.sections[x.dataset.section]=x.checked;save();render(true)}if(x.id==='project-cover-select'){
  ui.pendingProjectCoverId=x.value;
  const item=db.media.find(m=>m.id===x.value&&m.type?.startsWith('image/'));
  const preview=$('#project-cover-preview');if(preview)preview.innerHTML=item?`<img src="${esc(item.src)}" alt="Cover preview">`:'<div class="cover-empty">No cover selected</div>';
@@ -485,11 +572,11 @@ document.addEventListener('change',async ev=>{const x=ev.target;if(x.id==='custo
    db.media.unshift(res);ui.pendingProjectCoverId=res.id;
    const select=$('#project-cover-select');if(select){select.add(new Option(res.name,res.id));select.value=res.id}
    const preview=$('#project-cover-preview');if(preview)preview.innerHTML=`<img src="${esc(res.src)}" alt="Uploaded cover">`;
-   const gallery=$('.media-checklist');if(gallery){const label=document.createElement('label');label.className='inline-checkbox';const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.name='mediaIds';checkbox.value=res.id;label.append(checkbox,document.createTextNode(' '+res.name));gallery.prepend(label)}
+   $('.media-checklist')?.insertAdjacentHTML('beforeend',projectMediaRow(res.id,res.name,false));
    toast('Cover uploaded — save the project to attach it');
   }catch(err){toast('Cover upload failed: '+err.message)}finally{x.disabled=false}
  }
- if(x.id==='cert-image-upload'&&x.files[0]){try{const res=await uploadMedia(x.files[0]);ui.pendingCertImage=res.src;db.media.unshift(res);save();const im=$('.cert-image-preview img');if(im)im.src=res.src;toast('Certificate image uploaded — save the form')}catch(err){toast('Upload failed: '+err.message)}}if(x.id==='spanish-toggle'){db.settings.enableEs=x.checked;if(!x.checked&&ui.lang==='es')ui.lang='en';save();render(true)}if((x.id==='brand-logo-input'||x.id==='brand-favicon-input')&&x.files[0]){try{const file=x.files[0];if(!['image/png','image/jpeg','image/webp'].includes(file.type)){toast('Use PNG, JPEG or WebP');return}const key=x.id==='brand-logo-input'?'logo':'favicon';const res=await uploadMedia(file);db.brand[key]=res.src;db.media.unshift(res);save();render(true);toast(key==='logo'?'Portfolio logo uploaded':'Favicon uploaded')}catch(err){toast('Upload failed: '+err.message)}}if(x.id==='portrait-input'&&x.files[0]){try{const res=await uploadMedia(x.files[0]);db.hero.portrait=res.src;db.media.unshift(res);save();render(true);toast('Portrait uploaded')}catch(err){toast('Upload failed: '+err.message)}}if(x.id==='media-input'){let count=0;for(const file of [...x.files]){try{const res=await uploadMedia(file);db.media.unshift(res);count++}catch(e){toast('Failed '+file.name+': '+e.message)}}save();render(true);toast(`${count} media file(s) uploaded`)}
+ if(x.id==='cert-image-upload'&&x.files[0]){try{const res=await uploadMedia(x.files[0]);ui.pendingCertImage=res.src;db.media.unshift(res);save();const im=$('.cert-image-preview img');if(im)im.src=res.src;toast('Certificate image uploaded — save the form')}catch(err){toast('Upload failed: '+err.message)}}if(x.id==='spanish-toggle'){db.settings.enableEs=x.checked;if(!x.checked&&ui.lang==='es')ui.lang='en';save();render(true)}if((x.id==='brand-logo-input'||x.id==='brand-favicon-input')&&x.files[0]){try{const file=x.files[0];if(!['image/png','image/jpeg','image/webp'].includes(file.type)){toast('Use PNG, JPEG or WebP');return}const key=x.id==='brand-logo-input'?'logo':'favicon';const res=await uploadMedia(file);db.brand[key]=res.src;db.media.unshift(res);save();render(true);toast(key==='logo'?'Portfolio logo uploaded':'Favicon uploaded')}catch(err){toast('Upload failed: '+err.message)}}if(x.id==='portrait-input'&&x.files[0]){try{const res=await uploadMedia(x.files[0]);db.hero.portrait=res.src;db.media.unshift(res);save();render(true);toast('Portrait uploaded')}catch(err){toast('Upload failed: '+err.message)}}
 if(x.id==='cv-upload'&&x.files[0]){try{const file=x.files[0];if(file.type!=='application/pdf')throw new Error('Only PDF accepted');const res=await api('/api/admin/cv',{method:'PUT',headers:{'Content-Type':'application/pdf'},body:file});db.settings.cvUrl=res.src;db.media.unshift(res);save();render(true);toast('CV uploaded and Download CV is active')}catch(e){toast('CV upload failed: '+e.message)}}});
 document.addEventListener('submit',async ev=>{const f=ev.target;if(!['login-form','hero-form','portrait-appearance-form','portfolio-preferences-form','seo-home-form','portrait-alt-form','media-alt-form','project-form','cert-form','offer-form','hard-skill-form','soft-skill-form','contact-form','experience-form','social-form','view-form','custom-section-form','custom-item-form','cv-form'].includes(f.id))return;ev.preventDefault();f.querySelectorAll('.tag-editor').forEach(ed=>{const pending=ed.querySelector('.tag-entry')?.value;if(pending)addTags(ed,pending)});const fd=new FormData(f),d=Object.fromEntries(fd.entries());switch(f.id){
 case 'cv-form':{
