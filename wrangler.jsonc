@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "maher-portfolio",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-19",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/",
+      "/projects/*",
+      "/focus/*",
+      "/admin",
+      "/api/*",
+      "/media/*",
+      "/cv",
+      "/robots.txt",
+      "/sitemap.xml", "/cv/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "maher-portfolio-db",
+      "database_id": "df928b5b-5e3e-4e5e-808f-b598979f8fad",
+      "migrations_dir": "database"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "maher-portfolio-media"
+    }
+  ],
+  "vars": {
+    "SITE_ORIGIN": "https://maher2004.dev",
+    "ALLOWED_ORIGINS": "",
+    "CLOUDFLARE_ZONE_ID": ""
+  },
+  "workers_dev": true
+}

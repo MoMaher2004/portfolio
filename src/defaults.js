@@ -1,0 +1,176 @@
+export const defaults = {
+  "hero": {
+    "status": "OPEN TO OPPORTUNITIES",
+    "statusAr": "متاح لفرص العمل والتعاون",
+    "line1": "Engineering ideas into",
+    "line1Ar": "أحوّل الأفكار إلى",
+    "line2": "reliable experiences.",
+    "line2Ar": "حلول يُعتمد عليها.",
+    "intro": "Backend-focused software engineer building thoughtful digital products, from web platforms to connected systems.",
+    "introAr": "مهندس برمجيات أركز على تطوير الـBackend وبناء منتجات رقمية عملية، من منصات الويب إلى الأنظمة الذكية.",
+    "about": "I design and develop software with a focus on sound architecture, maintainability, and real-world needs. My work includes business systems, e-commerce and selected AI and IoT projects.",
+    "aboutAr": "أطوّر أنظمة برمجية تركز على التصميم الهندسي الجيد وسهولة الصيانة وحل مشكلات فعلية. تشمل أعمالي أنظمة الأعمال والتجارة الإلكترونية وبعض مشروعات الذكاء الاصطناعي وإنترنت الأشياء.",
+    "portrait": "",
+    "portraitBgMode": "gradient",
+    "portraitBg1": "#e4edff",
+    "portraitBg2": "#8eaaef",
+    "portraitBgAngle": 145,
+    "portraitBadge": false,
+    "portraitBadgeText": "Made to build what matters.",
+    "portraitBadgeTextAr": "أبني حلولًا لها قيمة.",
+    "portraitBadgeTextEs": "Construyendo lo que importa."
+  },
+  "settings": {
+    "enableEs": false,
+    "focus": "Backend Engineering",
+    "defaultTrack": "All",
+    "cvUrl": "",
+    "cvs": [],
+    "contactEmail": "",
+    "whatsapp": ""
+  },
+  "brand": {
+    "logo": "",
+    "favicon": ""
+  },
+  "sections": {
+    "projects": true,
+    "about": true,
+    "experience": false,
+    "skills": true,
+    "education": true,
+    "certificates": false,
+    "offers": false,
+    "contact": true,
+    "testimonials": false,
+    "achievements": false,
+    "services": false,
+    "process": false,
+    "insights": false,
+    "faq": false
+  },
+  "sectionsOrder": [
+    "projects",
+    "about",
+    "experience",
+    "skills",
+    "services",
+    "achievements",
+    "education",
+    "certificates",
+    "offers",
+    "process",
+    "testimonials",
+    "insights",
+    "faq",
+    "contact"
+  ],
+  "experience": [],
+  "socials": [],
+  "views": [],
+  "projects": [],
+  "hardSkills": [
+    {
+      "id": "hard-backend",
+      "name": "Backend & APIs",
+      "nameAr": "الباك إند وواجهات API",
+      "nameEs": "Backend y APIs",
+      "items": [
+        "Node.js",
+        "Express.js",
+        "TypeScript",
+        "JavaScript",
+        "PHP",
+        "Laravel",
+        "Python",
+        "Flask",
+        "FastAPI",
+        "REST APIs"
+      ]
+    },
+    {
+      "id": "hard-database",
+      "name": "Databases",
+      "nameAr": "قواعد البيانات",
+      "nameEs": "Bases de datos",
+      "items": [
+        "PostgreSQL",
+        "MySQL",
+        "MariaDB",
+        "MongoDB",
+        "SQLite",
+        "SQL"
+      ]
+    },
+    {
+      "id": "hard-frontend",
+      "name": "Frontend",
+      "nameAr": "الواجهة الأمامية",
+      "nameEs": "Frontend",
+      "items": [
+        "HTML",
+        "CSS",
+        "JavaScript",
+        "React",
+        "Bootstrap"
+      ]
+    },
+    {
+      "id": "hard-tools",
+      "name": "Tools & DevOps",
+      "nameAr": "أدوات التطوير والنشر",
+      "nameEs": "Herramientas",
+      "items": [
+        "Git",
+        "Linux",
+        "Docker",
+        "Nginx",
+        "PM2",
+        "VS Code",
+        "Cloudflare"
+      ]
+    },
+    {
+      "id": "hard-other",
+      "name": "Other Engineering",
+      "nameAr": "مجالات هندسية أخرى",
+      "nameEs": "Otras áreas",
+      "items": [
+        "Python",
+        "Pandas",
+        "scikit-learn",
+        "OpenCV",
+        "ESP8266",
+        "C/C++",
+        "MicroPython"
+      ]
+    }
+  ],
+  "softSkills": [
+    {
+      "id": "soft-problem",
+      "name": "Problem solving",
+      "nameAr": "حل المشكلات"
+    },
+    {
+      "id": "soft-pressure",
+      "name": "Working under pressure",
+      "nameAr": "العمل تحت الضغط"
+    },
+    {
+      "id": "soft-learning",
+      "name": "Self-directed learning",
+      "nameAr": "التعلم الذاتي"
+    },
+    {
+      "id": "soft-analytical",
+      "name": "Analytical thinking",
+      "nameAr": "التفكير التحليلي"
+    }
+  ],
+  "certificates": [],
+  "offers": [],
+  "customSections": [],
+  "media": [],
+  "messages": []
+};

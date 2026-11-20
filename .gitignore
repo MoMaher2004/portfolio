@@ -1,0 +1,35 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.secrets/
+*.log
+node_modules/
+.wrangler/
+.env
+.env.*
+.dev.vars*
+*.zip
+*.bak
+*.pem
+*.key
+
+# Backups
+.backups/
+.portfolio-update-backups/
+wrangler.backup.jsonc
+
+# Old update packages
+portfolio-*-update/
+media-delete-guard-update/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local secrets
+.env
+.env.*
+.dev.vars*
+*.pem
+*.key
