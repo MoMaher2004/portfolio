@@ -1,3 +1,4 @@
+import { contactDetails, ensureMessageDetails, readMessages } from './contact.js';
 import { readSite, seedOnce, putState, arrays, configs, listCollection, replaceCollection, getItem, upsertItem, deleteItem } from './data.js';
 import { renderHtml, renderAdmin } from './render.js';
 import { defaults } from './defaults.js';
@@ -168,10 +169,24 @@ async function main(req,env,ctx){
      const result=await uploaded.json();
      const s=await readSite(env,{admin:true});s.settings.cvUrl=result.src;await putState(env,s);return json(result,201);
    }
-   if(path==='/api/admin/messages'&&req.method==='GET')return json((await readSite(env,{admin:true})).messages);
-   if(/^\/api\/admin\/messages\/[-a-zA-Z0-9_]+$/.test(path)){
-     const id=path.split('/').at(-1);if(req.method==='PATCH') {const body=await readBody(req,2048);await env.DB.prepare('UPDATE messages SET is_read=? WHERE id=?').bind(body.read?1:0,id).run();return json({ok:true})}
-     if(req.method==='DELETE'){await env.DB.prepare('DELETE FROM messages WHERE id=?').bind(id).run();return json({ok:true})}
+   if(path==='/api/admin/messages'&&req.method==='GET')return json(await readMessages(env.DB));
+   if(/^\/api\/admin\/messages\/[-a-zA-Z0-9_]+$/.test(path)&&['PATCH','DELETE'].includes(req.method)){
+     const id=path.split('/').at(-1);
+     await ensureMessageDetails(env.DB);
+     if(req.method==='DELETE'){
+       await env.DB.batch([
+         env.DB.prepare('DELETE FROM message_details WHERE id=?').bind(id),
+         env.DB.prepare('DELETE FROM messages WHERE id=?').bind(id),
+       ]);
+       return json({ok:true});
+     }
+     const body=await readBody(req,2048),updates=[];
+     if(typeof body.read==='boolean')updates.push(env.DB.prepare('UPDATE messages SET is_read=? WHERE id=?').bind(Number(body.read),id));
+     if(typeof body.archived==='boolean')updates.push(env.DB.prepare(`INSERT INTO message_details(id,archived)
+       SELECT id,? FROM messages WHERE id=? ON CONFLICT(id) DO UPDATE SET archived=excluded.archived`).bind(Number(body.archived),id));
+     if(!updates.length)return error('Provide a read or archived boolean');
+     await env.DB.batch(updates);
+     return json({ok:true});
    }
    const mediaPath=path.match(/^\/api\/admin\/files\/([0-9a-f-]{36})(?:\/references)?$/i);
    if(mediaPath && (req.method==='DELETE' || req.method==='GET' && path.endsWith('/references'))) {
@@ -203,9 +218,19 @@ async function main(req,env,ctx){
  if(path==='/api/contact'&&req.method==='POST'){
    const key=await ipHash(req);if(await throttle(env,'contact_limits',key,5,3600,true))return error('Too many messages, try later',429);
    const body=await readBody(req,8000);if(body.website)return json({ok:true});
-   const name=cleanText(body.name,100),email=cleanText(body.email,200),message=cleanText(body.message,3000);
-   if(name.length<2||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||message.length<8)return error('Valid name, email and message are required');
-   await env.DB.prepare('INSERT INTO messages(id,name,email,message) VALUES(?,?,?,?)').bind(crypto.randomUUID(),name,email,message).run();return json({ok:true},201);
+   const name=cleanText(body.name,100), message=cleanText(body.message,3000), contact=contactDetails(body);
+   if(name.length<2||message.length<8)return error('Provide a name and a message of at least 8 characters');
+   if(!contact)return error('Provide a valid email or an international phone number with WhatsApp or Telegram selected');
+   const id=crypto.randomUUID();
+   const ip=req.headers.get('CF-Connecting-IP')?.slice(0,45)||null;
+   const userAgent=req.headers.get('User-Agent')?.slice(0,512)||null;
+   await ensureMessageDetails(env.DB);
+   await env.DB.batch([
+     env.DB.prepare('INSERT INTO messages(id,name,email,message) VALUES(?,?,?,?)').bind(id,name,contact.email,message),
+     env.DB.prepare('INSERT INTO message_details(id,method,phone,ip,user_agent) VALUES(?,?,?,?,?)')
+       .bind(id,contact.method,contact.phone,ip,userAgent),
+   ]);
+   return json({ok:true},201);
  }
  if(/^\/media\/[0-9a-f-]{36}$/.test(path)&&req.method==='GET'){
    const id=path.slice('/media/'.length),row=await env.DB.prepare('SELECT object_key,mime_type FROM media_files WHERE id=?').bind(id).first();if(!row)return error('Not found',404);

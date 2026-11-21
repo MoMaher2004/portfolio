@@ -1,3 +1,4 @@
+import { readMessages } from './contact.js';
 import { defaults } from './defaults.js';
 
 export const arrays = ['projects','experience','socials','views','hardSkills','softSkills','certificates','offers','customSections','media'];
@@ -18,7 +19,7 @@ export async function readSite(env, { admin=false }={}) {
   for(const r of conf.results||[]) {
     if(configs.includes(r.name)) { try { state[r.name]=JSON.parse(r.content) } catch {} }
   }
-  state.messages = admin ? (await env.DB.prepare('SELECT id,name,email,message,is_read,created_at FROM messages ORDER BY created_at DESC LIMIT 250').all()).results.map(r=>({id:r.id,name:r.name,email:r.email,message:r.message,read:!!r.is_read,created_at:r.created_at})) : [];
+  state.messages = admin ? await readMessages(env.DB) : [];
   if(!admin){
     state.projects=state.projects.filter(p=>p.published);
     state.offers=state.offers.filter(o=>o.active);
