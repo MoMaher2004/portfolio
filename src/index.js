@@ -1,4 +1,4 @@
-import { contactDetails, ensureMessageDetails, readMessages } from './contact.js';
+import { callingCodes, contactDetails, ensureMessageDetails, readMessages } from './contact.js';
 import { readSite, seedOnce, putState, arrays, configs, listCollection, replaceCollection, getItem, upsertItem, deleteItem } from './data.js';
 import { renderHtml, renderAdmin } from './render.js';
 import { defaults } from './defaults.js';
@@ -215,12 +215,29 @@ async function main(req,env,ctx){
    return error('Not found',404);
  }
  if(path==='/api/site-data'&&req.method==='GET')return json(await readSite(env));
+ if(path==='/api/contact/options'&&req.method==='GET'){
+   const country=req.cf?.country;
+   return json({country:Object.hasOwn(callingCodes,country)?country:null,callingCodes});
+ }
  if(path==='/api/contact'&&req.method==='POST'){
-   const key=await ipHash(req);if(await throttle(env,'contact_limits',key,5,3600,true))return error('Too many messages, try later',429);
    const body=await readBody(req,8000);if(body.website)return json({ok:true});
    const name=cleanText(body.name,100), message=cleanText(body.message,3000), contact=contactDetails(body);
    if(name.length<2||message.length<8)return error('Provide a name and a message of at least 8 characters');
-   if(!contact)return error('Provide a valid email or an international phone number with WhatsApp or Telegram selected');
+   if(!contact)return error('Enter a valid email or phone number. For a local number, select its country.');
+   const ipHeader=req.headers.get('CF-Connecting-IP');
+   if(ipHeader){
+     const now=Math.floor(Date.now()/1000), cutoff=now-600, key='v2:'+await ipHash(req);
+     const accepted=await env.DB.prepare(`INSERT INTO contact_limits(ip_hash,hits,window_start) VALUES(?,1,?)
+       ON CONFLICT(ip_hash) DO UPDATE SET
+       hits=CASE WHEN window_start<=? THEN 1 ELSE hits+1 END,
+       window_start=CASE WHEN window_start<=? THEN excluded.window_start ELSE window_start END
+       WHERE window_start<=? OR hits<5 RETURNING hits`).bind(key,now,cutoff,cutoff,cutoff).first();
+     if(!accepted){
+       const limit=await env.DB.prepare('SELECT window_start FROM contact_limits WHERE ip_hash=?').bind(key).first();
+       const retry=Math.max(1,(limit?.window_start??now)+600-now);
+       return json({error:`Too many messages. Try again in about ${Math.ceil(retry/60)} minute(s).`},429,{'Retry-After':String(retry)});
+     }
+   }
    const id=crypto.randomUUID();
    const ip=req.headers.get('CF-Connecting-IP')?.slice(0,45)||null;
    const userAgent=req.headers.get('User-Agent')?.slice(0,512)||null;

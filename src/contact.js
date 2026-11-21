@@ -1,3 +1,7 @@
+import { getCountries, getCountryCallingCode, parsePhoneNumberFromString } from 'libphonenumber-js/max';
+
+export const callingCodes = Object.fromEntries(getCountries().map(code => [code, getCountryCallingCode(code)]));
+
 export function contactDetails(body) {
   const method = body.contactMethod ?? 'email';
   if (method === 'email') {
@@ -7,9 +11,15 @@ export function contactDetails(body) {
   if (!['whatsapp', 'telegram'].includes(method)) return null;
   const phone = String(body.phone ?? '').trim().replace(/[٠-٩۰-۹]/g, digit =>
     String(digit.charCodeAt(0) % 16));
-  if (!/^\+[\d\s().-]+$/.test(phone) || phone.length > 40) return null;
-  const normalized = phone.replace(/[\s().-]/g, '');
-  return /^\+[1-9]\d{7,14}$/.test(normalized) ? { method, email: '', phone: normalized } : null;
+  if (!/^\+?[\d\s().-]+$/.test(phone) || phone.length > 40) return null;
+  const international = phone.replace(/^00/, '+');
+  const country = typeof body.country === 'string' ? body.country.toUpperCase() : '';
+  if (!international.startsWith('+') && !Object.hasOwn(callingCodes,country)) return null;
+  const number = parsePhoneNumberFromString(international,{
+    defaultCountry: Object.hasOwn(callingCodes,country) ? country : undefined,
+    extract:false,
+  });
+  return number?.isValid() ? { method, email:'', phone:number.number } : null;
 }
 
 export async function ensureMessageDetails(db) {

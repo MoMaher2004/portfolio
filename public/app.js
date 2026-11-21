@@ -155,7 +155,7 @@ function home(){
  education:`<section class="wrap section education-section" id="education"><div class="edu-mark">◎</div><div><span class="eyebrow">05 / ${t('education')}</span><h2>${t('eduDegree')}</h2><p>${t('eduUni')}</p></div><span class="edu-year">2026</span></section>`,
  certificates:`<section class="wrap section certificates-section" id="certificates"><div class="section-bar"><div><span class="eyebrow">06 / ${t('certs')}</span><h2 class="section-title">${t('certTitle')}</h2><p class="section-intro">${tr('A record of structured learning and hands-on training.','شهادات وتدريبات متخصصة وتطبيقات عملية.')}</p></div></div><div class="cert-grid">${db.certificates.map((c,i)=>`<article class="cert-card">${certVisual(c,i)}<div class="cert-body"><span class="cert-issuer">${esc(c.issuer)} <span>· ${esc(c.year)}</span></span><h3>${esc(loc(c,'title'))}</h3><span class="cert-link">Credential ↗</span></div></article>`).join('')}</div></section>`,
  offers:`<section class="section offers-section" id="offers"><div class="wrap"><div class="section-bar"><div><span class="eyebrow">✦ &nbsp; ${t('offerLabel')}</span><h2 class="section-title">${t('offerTitle')}</h2><p class="section-intro">${tr('Special opportunities for new projects — discuss the terms that fit your needs.','عروض خاصة للمشروعات الجديدة — نتفق على الشروط اللي تناسبك.','Opciones especiales para nuevos proyectos.')}</p></div></div><div class="offer-grid">${db.offers.filter(o=>o.active).map((o,i)=>`<article class="offer-card ${i===0?'offer-featured':''}"><div class="offer-glow"></div><div class="offer-content"><div class="offer-heading"><span class="offer-symbol">✳</span><span class="offer-tag">${esc(loc(o,'highlight'))}</span></div><div class="offer-keyword">${esc(loc(o,'keyword')||'FREE')}</div><div class="offer-exclusive">${tr('SPECIAL PROJECT OFFER','عرض خاص للمشاريع','OFERTA ESPECIAL')}</div><h3>${esc(loc(o,'title'))}</h3><p>${esc(loc(o,'description'))}</p><div class="offer-terms">ⓘ ${esc(loc(o,'terms'))}</div><a class="btn primary" href="/#contact">${t('offerBtn')} ↗</a></div><div class="offer-visual" aria-hidden="true"><div class="offer-circle">✦</div><span>${tr('Start your idea','ابدأ فكرتك','Empieza tu idea')}</span></div></article>`).join('')}</div></div></section>`,
- contact:`<section class="section wrap" id="contact"><div class="contact-slab"><div class="contact-copy"><span class="eyebrow">08 / ${t('contact')}</span><h2 class="section-title">${t('contactTitle')}</h2><p class="section-intro">${t('contactSubtitle')}</p><div class="contact-links">${socialLinks()}</div></div><form id="contact-form"><div class="field"><label>${t('name')}</label><input required name="name" maxlength="90" placeholder="${tr('Your name','اسمك')}"></div><div class="field"><label for="contact-address">${tr('Email or phone number','البريد الإلكتروني أو رقم الهاتف','Correo electrónico o teléfono')}</label><input id="contact-address" name="contactAddress" type="text" maxlength="200" autocapitalize="none" spellcheck="false" required placeholder="you@example.com / +20 100 123 4567"></div><div class="field" data-contact-platform hidden><label for="contact-method">${tr('Reply via','طريقة الرد','Responder por')}</label><select id="contact-method" name="contactMethod" disabled><option value="">${tr('Choose an app','اختر تطبيقًا','Elige una aplicación')}</option><option value="whatsapp">WhatsApp</option><option value="telegram">Telegram</option></select></div><div class="field"><label>${t('message')}</label><textarea required name="message" maxlength="4000" placeholder="${tr('Tell me about your idea...','احكي لي عن فكرتك...')}"></textarea></div><p class="sub small">${tr('Your IP address and basic device information are saved with your message.','يُحفظ عنوان IP ومعلومات الجهاز الأساسية مع رسالتك.','Tu dirección IP y datos básicos del dispositivo se guardan con el mensaje.')}</p><button class="btn primary" type="submit" style="width:100%">${t('send')} ↗</button></form></div></section>`
+ contact:`<section class="section wrap" id="contact"><div class="contact-slab"><div class="contact-copy"><span class="eyebrow">08 / ${t('contact')}</span><h2 class="section-title">${t('contactTitle')}</h2><p class="section-intro">${t('contactSubtitle')}</p><div class="contact-links">${socialLinks()}</div></div><form id="contact-form"><div class="field"><label>${t('name')}</label><input required name="name" maxlength="90" placeholder="${tr('Your name','اسمك')}"></div><div class="field"><label for="contact-address">${tr('Email or phone number','البريد الإلكتروني أو رقم الهاتف','Correo electrónico o teléfono')}</label><input id="contact-address" name="contactAddress" type="text" maxlength="200" autocapitalize="none" spellcheck="false" required placeholder="you@example.com / +20 100 123 4567"></div><div class="field" data-contact-country hidden><label for="contact-country">${tr('Country code','رمز الدولة','Código de país')}</label><select id="contact-country" name="country" disabled><option value="">${tr('Select country','اختر الدولة','Selecciona el país')}</option></select></div><div class="field" data-contact-platform hidden><label for="contact-method">${tr('Reply via','طريقة الرد','Responder por')}</label><select id="contact-method" name="contactMethod" disabled><option value="">${tr('Choose an app','اختر تطبيقًا','Elige una aplicación')}</option><option value="whatsapp">WhatsApp</option><option value="telegram">Telegram</option></select></div><div class="field"><label>${t('message')}</label><textarea required name="message" maxlength="4000" placeholder="${tr('Tell me about your idea...','احكي لي عن فكرتك...')}"></textarea></div><p class="sub small">${tr('Your IP address and basic device information are saved with your message.','يُحفظ عنوان IP ومعلومات الجهاز الأساسية مع رسالتك.','Tu dirección IP y datos básicos del dispositivo se guardan con el mensaje.')}</p><button class="btn primary" type="submit" style="width:100%">${t('send')} ↗</button></form></div></section>`
  };
  return `${nav()}<main class="public-site"><section class="wrap hero"><div class="hero-copy"><div class="hero-status"><span class="status-dot"></span>${esc(loc(db.hero,'status'))}</div><h1>${esc(loc(db.hero,'line1'))}<br><em>${esc(loc(db.hero,'line2'))}</em></h1><p class="lede">${esc(loc(db.hero,'intro'))}</p><div class="hero-ctas"><a class="btn primary" href="/#projects">${t('explore')} <span>↗</span></a>${cvButtons()}</div><div class="hero-bottomline"><span><strong>${String(ps.length).padStart(2,'0')}</strong> ${t('projects')}</span><span><strong>${String(db.certificates.length).padStart(2,'0')}</strong> ${t('certs')}</span><span class="hero-blueprint">${esc(db.settings.focus)}</span></div></div><div class="hero-image-zone">${portrait()}</div></section>${view?`<div class="wrap focus-banner"><span class="focus-icon">◎</span><div><strong>${esc(view.name)}</strong><p>${tr('Tailored project selection','اختيار مخصص للمشاريع')} · ${esc(view.tracks.join(' + ')||'Curated work')}</p></div><a href="/">${tr('Explore full portfolio','استعرض كل المشاريع')} ↗</a></div>`:''}${db.sectionsOrder.filter(k=>db.sections[k] && (k!=='projects'||db.projects.some(p=>p.published)) && (k!=='certificates'||db.certificates.length) && (k!=='experience'||db.experience.length) && (k!=='offers'||db.offers.some(o=>o.active)) && (k!=='testimonials'||db.customSections.some(s=>s.id==='testimonials'&&s.items.length)) && (k!=='achievements'||db.customSections.some(s=>s.id==='achievements'&&s.items.length)) && (k!=='services'||db.customSections.some(s=>s.id==='services'&&s.items.length)) && (k!=='process'||db.customSections.some(s=>s.id==='process'&&s.items.length)) && (k!=='insights'||db.customSections.some(s=>s.id==='insights'&&s.items.length)) && (k!=='faq'||db.customSections.some(s=>s.id==='faq'&&s.items.length))).map(k=>sectionHtml[k]||genericSection(db.customSections.find(x=>x.id===k)||{id:k,title:k,items:[]})).join('')}</main>${footer()}`;
 }
@@ -260,13 +260,37 @@ async function updateInboxMessage(id,action){
  }catch(error){toast('Message update failed: '+error.message)}
  finally{messageUpdating=false}
 }
+let contactOptions;
+let contactOptionsRequest;
+function populateContactCountries(select, options){
+ if(select.options.length>1)return;
+ const lang=document.documentElement.lang||'en';
+ const names=new Intl.DisplayNames([lang],{type:'region'});
+ const countries=Object.entries(options.callingCodes).map(([code,dial])=>[code,dial,names.of(code)]);
+ countries.sort((a,b)=>a[2].localeCompare(b[2],lang));
+ for(const [code,dial,name] of countries){
+  const flag=String.fromCodePoint(...Array.from(code,c=>127397+c.charCodeAt(0)));
+  select.add(new Option(`${flag} ${name} (+${dial})`,code,code===options.country));
+ }
+ select.value=options.country||'';
+}
 function syncContactMethod(form){
- const phone=/^\+?[0-9٠-٩۰-۹][0-9٠-٩۰-۹\s().-]*$/.test(form.elements.contactAddress.value.trim());
- const method=form.elements.contactMethod;
+ const address=form.elements.contactAddress.value.trim();
+ const phone=/^\+?[0-9٠-٩۰-۹(][0-9٠-٩۰-۹\s().-]*$/.test(address);
+ const method=form.elements.contactMethod,country=form.elements.country;
+ const international=/^(\+|[0٠۰]{2})/.test(address);
  method.closest('[data-contact-platform]').hidden=!phone;
+ country.closest('[data-contact-country]').hidden=!phone;
  method.disabled=!phone;
+ country.disabled=!phone;
  method.required=phone;
+ country.required=phone&&!international;
  if(!phone)method.value='';
+ if(phone&&contactOptions)populateContactCountries(country,contactOptions);
+ else if(phone){
+  contactOptionsRequest??=api('/api/contact/options').then(options=>contactOptions=options).finally(()=>{contactOptionsRequest=null});
+  contactOptionsRequest.then(options=>{if(country.isConnected)populateContactCountries(country,options)}).catch(()=>{});
+ }
  return phone;
 }
 function dashboardSection(){switch(ui.tab){
@@ -697,7 +721,7 @@ case 'contact-form':try{
  const phone=syncContactMethod(f);
  if(!f.reportValidity())break;
  const address=(d.contactAddress||'').trim();
- await api('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:d.name,email:phone?undefined:address,phone:phone?address:undefined,contactMethod:phone?f.elements.contactMethod.value:'email',message:d.message,website:d.website||''})});
+ await api('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:d.name,email:phone?undefined:address,phone:phone?address:undefined,country:phone?f.elements.country.value:undefined,contactMethod:phone?f.elements.contactMethod.value:'email',message:d.message,website:d.website||''})});
  f.reset();syncContactMethod(f);toast('Message sent successfully');
  }catch(e){toast('Message not sent: '+e.message)}break;
 }});
