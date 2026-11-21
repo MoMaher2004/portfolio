@@ -176,6 +176,7 @@ async function main(req,env,ctx){
      if(req.method==='DELETE'){
        await env.DB.batch([
          env.DB.prepare('DELETE FROM message_details WHERE id=?').bind(id),
+         env.DB.prepare('DELETE FROM message_countries WHERE id=?').bind(id),
          env.DB.prepare('DELETE FROM messages WHERE id=?').bind(id),
        ]);
        return json({ok:true});
@@ -240,12 +241,14 @@ async function main(req,env,ctx){
    }
    const id=crypto.randomUUID();
    const ip=req.headers.get('CF-Connecting-IP')?.slice(0,45)||null;
+   const country=/^[A-Z]{2}$/.test(req.cf?.country||'') && req.cf.country!=='XX' ? req.cf.country : null;
    const userAgent=req.headers.get('User-Agent')?.slice(0,512)||null;
    await ensureMessageDetails(env.DB);
    await env.DB.batch([
      env.DB.prepare('INSERT INTO messages(id,name,email,message) VALUES(?,?,?,?)').bind(id,name,contact.email,message),
      env.DB.prepare('INSERT INTO message_details(id,method,phone,ip,user_agent) VALUES(?,?,?,?,?)')
        .bind(id,contact.method,contact.phone,ip,userAgent),
+     env.DB.prepare('INSERT INTO message_countries(id,ip_country,phone_country) VALUES(?,?,?)').bind(id,country,contact.country??null),
    ]);
    return json({ok:true},201);
  }

@@ -19,7 +19,7 @@ export function contactDetails(body) {
     defaultCountry: Object.hasOwn(callingCodes,country) ? country : undefined,
     extract:false,
   });
-  return number?.isValid() ? { method, email:'', phone:number.number } : null;
+  return number?.isValid() ? { method, email:'', phone:number.number, country:number.country ?? null } : null;
 }
 
 export async function ensureMessageDetails(db) {
@@ -27,6 +27,9 @@ export async function ensureMessageDetails(db) {
     id TEXT PRIMARY KEY, method TEXT NOT NULL DEFAULT 'email',
     phone TEXT NOT NULL DEFAULT '', ip TEXT, user_agent TEXT,
     archived INTEGER NOT NULL DEFAULT 0
+  )`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS message_countries (
+    id TEXT PRIMARY KEY, ip_country TEXT, phone_country TEXT
   )`).run();
 }
 
@@ -37,14 +40,17 @@ export function deviceInfo(userAgent) {
     : /Macintosh|Mac OS/i.test(ua) ? 'macOS' : /Linux/i.test(ua) ? 'Linux' : '';
   const device = /iPad|Tablet/i.test(ua) || (os === 'Android' && !/Mobile/i.test(ua)) ? 'Tablet'
     : /Mobile|iPhone|iPod/i.test(ua) ? 'Phone' : os ? 'Computer' : '';
-  return { os, device };
+  const browser = /Edg(?:A|iOS)?\//i.test(ua) ? 'Edge' : /OPR\/|Opera|OPiOS\//i.test(ua) ? 'Opera'
+    : /SamsungBrowser\//i.test(ua) ? 'Samsung Internet' : /Firefox\/|FxiOS\//i.test(ua) ? 'Firefox'
+    : /Chrome\/|CriOS\//i.test(ua) ? 'Chrome' : /Version\/.*Safari\//i.test(ua) ? 'Safari' : '';
+  return { os, device, browser };
 }
 
 export async function readMessages(db) {
   await ensureMessageDetails(db);
   const { results = [] } = await db.prepare(`SELECT m.id,m.name,m.email,m.message,m.is_read,m.created_at,
-    d.method,d.phone,d.ip,d.user_agent,d.archived FROM messages m
-    LEFT JOIN message_details d ON d.id=m.id ORDER BY m.created_at DESC LIMIT 250`).all();
+    d.method,d.phone,d.ip,d.user_agent,d.archived,c.ip_country AS country,c.phone_country AS phoneCountry FROM messages m
+    LEFT JOIN message_details d ON d.id=m.id LEFT JOIN message_countries c ON c.id=m.id ORDER BY m.created_at DESC LIMIT 250`).all();
   return results.map(({ is_read, archived, method, user_agent, ...row }) => ({
     ...row, contactMethod: method || 'email', read: Boolean(is_read), archived: Boolean(archived),
     ...deviceInfo(user_agent),
