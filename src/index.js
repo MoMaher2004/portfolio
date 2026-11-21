@@ -1,5 +1,6 @@
 import { readSite, seedOnce, putState, arrays, configs, listCollection, replaceCollection, getItem, upsertItem, deleteItem } from './data.js';
 import { renderHtml, renderAdmin } from './render.js';
+import { defaults } from './defaults.js';
 import { findMediaReferences } from './media-usage.js';
 
 const json = (value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...extra}});
@@ -140,6 +141,27 @@ async function main(req,env,ctx){
    if(path==='/api/admin/analytics'&&req.method==='GET')return json(await analytics(env,url.searchParams.get('days')||30));
    if(path==='/api/admin/analytics/cloudflare'&&req.method==='GET')return json(await cloudflareAnalytics(env));
    if(path==='/api/admin/files'&&req.method==='POST')return upload(req,env,url.searchParams.get('name'));
+   if(path==='/api/admin/portrait'&&req.method==='PUT'){
+     const type=(req.headers.get('Content-Type')||'').split(';')[0].trim().toLowerCase();
+     if(!type.startsWith('image/')||!mediaMime(type))return error('Unsupported portrait image type',415);
+     const uploaded=await upload(req,env,'portrait');
+     if(uploaded.status!==201)return uploaded;
+     const item=await uploaded.json();
+     try{
+       await env.DB.batch([
+         env.DB.prepare("INSERT INTO content_items(collection,id,position,content) VALUES('media',?,(SELECT COALESCE(MIN(position),0)-1 FROM content_items WHERE collection='media'),?)").bind(item.id,JSON.stringify(item)),
+         env.DB.prepare("INSERT INTO configuration(name,content) VALUES('hero',?) ON CONFLICT(name) DO UPDATE SET content=json_set(configuration.content,'$.portrait',?), updated_at=CURRENT_TIMESTAMP").bind(JSON.stringify({...defaults.hero,portrait:item.src}),item.src),
+       ]);
+     }catch(err){
+       const row=await env.DB.prepare('SELECT object_key FROM media_files WHERE id=?').bind(item.id).first();
+       if(row){
+         await env.FILES.delete(row.object_key);
+         await env.DB.prepare('DELETE FROM media_files WHERE id=?').bind(item.id).run();
+       }
+       throw err;
+     }
+     return json(item,201);
+   }
    if(path==='/api/admin/cv'&&req.method==='PUT'){
      if(req.headers.get('Content-Type')!=='application/pdf')return error('Only PDF accepted',415);
      const uploaded=await upload(req,env,'resume.pdf');if(uploaded.status!==201)return uploaded;
