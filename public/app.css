@@ -314,5 +314,22 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Tahoma,s
 
 .card-poster:has(.video-thumbnail){position:relative}
 .video-thumbnail{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-.card-poster>.video-pill{position:absolute;right:12px;bottom:12px}
 .gallery-media.primary .video-stage{pointer-events:auto}
+
+
+.btn.dash-menu-toggle{display:none}
+@media(max-width:760px){
+ .dashboard .dash-sidebar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px}
+ .dashboard .dash-brand{padding:0;min-width:0}
+ .dashboard .dash-brand small,.dashboard .dash-sidebottom,.dashboard .dash-label{display:none}
+ .dashboard .btn.dash-menu-toggle{display:inline-flex;gap:10px;min-height:44px;align-items:center;color:#fff;background:#344d8a}
+ .dashboard .dash-nav{display:none;grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0;overflow:visible}
+ .dashboard .dash-menu-toggle[aria-expanded="true"]+.dash-nav{display:grid}
+ .dashboard .dash-nav button{min-width:0;min-height:44px;gap:7px;white-space:normal;overflow-wrap:anywhere}
+ .dash-top,.dash-heading,.dash-top .account{flex-wrap:wrap;gap:10px}
+ .dashboard .btn,.dashboard .round,.login-card .btn,.dialog .btn,.dialog .round{min-height:44px}
+ .dashboard .round,.dialog .round{min-width:44px}
+ .dashboard input:not([type=checkbox]):not([type=radio]),.dashboard select,.dashboard textarea,.dialog input:not([type=checkbox]):not([type=radio]),.dialog select,.dialog textarea,.login-card input{font-size:16px}
+ .login-card form>.btn{width:100%}
+ .dash-main:focus{outline:none}
+}
