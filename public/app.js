@@ -22,6 +22,14 @@ const tr=(en,ar,es)=>ui.lang==='ar'?ar:ui.lang==='es'?(es||en):en;
 function loc(o,k){return (ui.lang==='ar'&&o[k+'Ar'])||(ui.lang==='es'&&o[k+'Es'])||o[k]||''}
 const pills=items=>`<div class="pills">${(items||[]).map(x=>`<span class="pill">${esc(x)}</span>`).join('')}</div>`;
 const badge=(str,draft=false)=>`<span class="badge ${draft?'draft':''}">${esc(str)}</span>`;
+// D1 lists media in ascending position (new uploads are inserted first).
+// If every item provides an upload timestamp, use it explicitly instead.
+function mediaNewestFirst(){
+ const files=[...db.media];
+ const stamp=m=>Date.parse(m.uploadedAt||m.createdAt||m.uploaded_at||m.created_at||'');
+ if(files.length&&files.every(m=>Number.isFinite(stamp(m))))files.sort((a,b)=>stamp(b)-stamp(a));
+ return files;
+}
 async function api(path,options={}){
  const headers={...options.headers};
  if(adminToken)headers.Authorization=`Bearer ${adminToken}`;
@@ -307,7 +315,7 @@ case 'skills':return `${dh('Profile / Expertise','Skills Manager','Edit hard-ski
 case 'offers':return `${dh('Clients / Commercial','Offers','Flexible proposals with clear conditions.',`<button class="btn primary sm" data-action="new-offer">+ New offer</button>`)}<div class="offer-admin-grid">${db.offers.map(o=>`<div class="panel offer-admin"><div class="panel-header"><h3>${esc(o.title)}</h3>${badge(o.active?'Active':'Hidden',!o.active)}</div><p class="sub small">${esc(o.description)}</p><p class="muted micro">${esc(o.terms)}</p><div class="hero-ctas"><button class="btn sm" data-action="edit-offer" data-id="${esc(o.id)}">Edit</button><button class="btn sm" data-action="toggle-offer" data-id="${esc(o.id)}">${o.active?'Hide':'Publish'}</button><button class="btn sm danger" data-action="delete-offer" data-id="${esc(o.id)}">Delete</button></div></div>`).join('')}</div>`;
 case 'sections':return `${dh('Site / Layout','Sections & layout','Create custom content blocks, choose layout, reorder and publish.',`<button class="btn primary sm" data-action="new-custom-section">+ Custom section</button>`)}<div class="panel"><div class="panel-header"><h3>Homepage section order</h3>${badge('Drag-free ordering')}</div><div class="sortable-list">${db.sectionsOrder.map((k,i)=>`<div class="sortable-row"><div class="sort-grip">☷</div><div class="sort-name"><b>${esc(sectionName(k))}</b><span>${db.customSections.some(x=>x.id===k)?'Flexible section · '+esc(db.customSections.find(x=>x.id===k).layout):'Core section'} · ${i+1} / ${db.sectionsOrder.length}</span></div>${orderButtons('section',k,i,db.sectionsOrder.length)}${db.customSections.some(x=>x.id===k)?`<div class="table-actions"><button data-action="edit-custom-section" data-id="${esc(k)}">Edit</button><button data-action="delete-custom-section" data-id="${esc(k)}">Delete</button></div>`:''}<label class="toggle-switch"><input type="checkbox" data-section="${esc(k)}" ${db.sections[k]?'checked':''}><span>${db.sections[k]?'Visible':'Hidden'}</span></label></div>`).join('')}</div><p class="sub micro">Sections with sample content are clearly labeled. Edit or hide them before publishing.</p></div><div class="panel"><div class="panel-header"><h3>Flexible sections & content</h3><button class="btn sm primary" data-action="new-custom-section">+ Create</button></div><div class="custom-admin-grid">${db.customSections.map(x=>`<article class="custom-admin-card"><span class="eyebrow">${esc(x.layout.toUpperCase())} · ${x.items.length} items</span><h3>${esc(x.title)}</h3><p class="sub small">${esc(x.description||'')}</p><div class="table-actions"><button data-action="edit-custom-section" data-id="${esc(x.id)}">Edit section</button><button data-action="new-custom-item" data-id="${esc(x.id)}">+ Add item</button></div><div class="custom-item-list">${x.items.map((it,i)=>`<div class="custom-item-row"><b>${esc(it.title)}</b><div class="table-actions">${orderButtons('custom-item',x.id+'|'+it.id,i,x.items.length)}<button data-action="edit-custom-item" data-id="${esc(x.id+'|'+it.id)}">Edit</button><button data-action="delete-custom-item" data-id="${esc(x.id+'|'+it.id)}">✕</button></div></div>`).join('')}</div></article>`).join('')}</div></div>`;
 case 'certificates':return `${dh('Credentials / Training','Certificates','Add certificate cover images and adjust their order.',`<button class="btn primary sm" data-action="new-cert">+ New certificate</button>`)}<div class="panel"><div class="table-scroll"><table class="table"><thead><tr><th>Order</th><th>Preview</th><th>Certificate</th><th>Issuer</th><th>Year</th><th>Actions</th></tr></thead><tbody>${db.certificates.map((c,i)=>`<tr><td>${orderButtons('certificates',c.id,i,db.certificates.length)}</td><td><img class="admin-cert-preview" src="${esc(c.image||certificateMock(c,i))}" alt="Certificate"></td><td><b>${esc(c.title)}</b></td><td>${esc(c.issuer)}</td><td>${esc(c.year)}</td><td><div class="table-actions"><button data-action="edit-cert" data-id="${esc(c.id)}">Edit / Image</button><button data-action="delete-cert" data-id="${esc(c.id)}">Delete</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
-case 'media':return `${dh('Assets / Storage','Media Library','Upload files and assign them to projects in Edit Project.',`<button class="btn primary sm" data-action="upload">+ Upload</button>`)}<button type="button" class="upload-area" id="media-drop-zone" data-action="upload"><strong>Drop files here or click to browse</strong><span class="small">Images, videos, PDFs, JSON or text files. Up to 90 MiB per file.</span></button><input id="media-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,video/mp4,video/webm,.pdf,.json,.txt" multiple hidden><div class="media-grid">${db.media.map(m=>`<div class="media-item"><div class="media-visual" data-action="preview-media" data-id="${esc(m.id)}" role="button" tabindex="0" aria-label="Preview ${esc(m.name)}">${m.type.startsWith('image/')?`<img src="${esc(m.src)}" alt="${esc(m.name)}">`:m.type.startsWith('video/')?`<video src="${esc(m.src)}" muted preload="metadata" playsinline></video><span class="media-play-icon">▶</span>`:m.type==='application/pdf'?'<span class="media-pdf-icon">PDF</span>':'▧'}</div><div class="info"><b>${esc(m.name)}</b><p class="muted micro">${esc(m.type)}</p><div class="table-actions"><button class="btn sm" data-action="preview-media" data-id="${esc(m.id)}">Preview ↗</button>${m.type.startsWith('image/')?`<button class="btn sm" data-action="edit-media-alt" data-id="${esc(m.id)}">ALT text</button>`:''}<button class="btn sm danger" data-action="delete-media" data-id="${esc(m.id)}">Delete</button></div></div></div>`).join('')}</div>`;
+case 'media':return `${dh('Assets / Storage','Media Library','Upload files and assign them to projects in Edit Project.',`<button class="btn primary sm" data-action="upload">+ Upload</button>`)}<button type="button" class="upload-area" id="media-drop-zone" data-action="upload"><strong>Drop files here or click to browse</strong><span class="small">Images, videos, PDFs, JSON or text files. Up to 90 MiB per file.</span></button><input id="media-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,video/mp4,video/webm,.pdf,.json,.txt" multiple hidden><div class="field" style="margin:14px 0"><label for="media-library-search">Search media</label><input type="search" id="media-library-search" placeholder="Search filename or file type..." autocomplete="off"></div><p id="media-library-empty" class="field-help" hidden>No media matching your search.</p><div class="media-grid">${mediaNewestFirst().map(m=>`<div class="media-item"><div class="media-visual" data-action="preview-media" data-id="${esc(m.id)}" role="button" tabindex="0" aria-label="Preview ${esc(m.name)}">${m.type.startsWith('image/')?`<img src="${esc(m.src)}" alt="${esc(m.name)}">`:m.type.startsWith('video/')?`<video src="${esc(m.src)}" muted preload="metadata" playsinline></video><span class="media-play-icon">▶</span>`:m.type==='application/pdf'?'<span class="media-pdf-icon">PDF</span>':'▧'}</div><div class="info"><b>${esc(m.name)}</b><p class="muted micro">${esc(m.type)}</p><div class="table-actions"><button class="btn sm" data-action="preview-media" data-id="${esc(m.id)}">Preview ↗</button>${m.type.startsWith('image/')?`<button class="btn sm" data-action="edit-media-alt" data-id="${esc(m.id)}">ALT text</button>`:''}<button class="btn sm danger" data-action="delete-media" data-id="${esc(m.id)}">Delete</button></div></div></div>`).join('')}</div>`;
 case 'inbox':return inbox();
 case 'analytics':return analyticsDashboard();
 case 'settings':return `${dh('Workspace / Preferences','Settings','Brand identity, languages and preview controls.')}<div class="panel"><h3>Brand logo & tab icon</h3><p class="sub small">Upload your own logo and favicon (PNG, JPEG or WebP). If the favicon is missing, the logo is used as its fallback.</p><div class="brand-admin-grid"><div class="brand-upload"><div class="brand-preview">${db.brand.logo?`<img src="${esc(db.brand.logo)}" alt="">`:`${brandMark()}`}</div><b>Portfolio logo</b><input type="file" id="brand-logo-input" accept="image/png,image/jpeg,image/webp" hidden><div class="table-actions"><button class="btn sm primary" data-action="upload-brand-logo">Upload</button><button class="btn sm" data-action="clear-brand-logo">Remove</button></div></div><div class="brand-upload"><div class="brand-preview">${db.brand.favicon?`<img src="${esc(db.brand.favicon)}" alt="Favicon">`:db.brand.logo?`<img src="${esc(db.brand.logo)}" alt="Fallback favicon">`:'<span class="brand-mark">M.</span>'}</div><b>Browser tab icon</b><input type="file" id="brand-favicon-input" accept="image/png,image/jpeg,image/webp" hidden><div class="table-actions"><button class="btn sm primary" data-action="upload-brand-favicon">Upload</button><button class="btn sm" data-action="clear-brand-favicon">Remove</button></div></div></div></div><div class="panel"><h3>Professional identity & project filters</h3><p class="sub small">Choose how you describe yourself; categories are derived from published projects, so no empty categories appear. In Edit Project, add new tracks separated by commas.</p><form id="portfolio-preferences-form"><div class="field"><label>Main professional descriptor</label><input name="focus" value="${esc(db.settings.focus)}" placeholder="e.g. Software & Systems Engineer"></div><div class="field"><label>Default project filter</label><select name="defaultTrack">${['All',...new Set(db.projects.filter(p=>p.published).flatMap(p=>p.tracks||[]).map(x=>x.trim()).filter(Boolean))].map(x=>`<option value="${esc(x)}" ${(db.settings.defaultTrack||'All')===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div><div class="field"><label for="home-project-count">Projects shown on homepage</label><input id="home-project-count" name="homeProjectCount" type="number" min="5" step="1" required value="${homeProjectCount(db.settings.homeProjectCount)}"></div><button class="btn primary" type="submit">Save preferences ✓</button></form></div><div class="panel"><h3>Homepage SEO · Search appearance</h3><p class="sub small">Edit the search title and description used by your portfolio. Leave a field blank to use the existing page content.</p><form id="seo-home-form">
@@ -362,7 +370,7 @@ case 'project':{
 <div class="form-grid form-grid-three">${textField('seoDescription','Search description EN',p?.seoDescription||'',false,true)}${textField('seoDescriptionAr','Search description AR',p?.seoDescriptionAr||'',true,true)}${textField('seoDescriptionEs','Search description ES',p?.seoDescriptionEs||'',false,true)}</div>
 </div>
 <div class="panel project-cover-editor"><h3>Project cover / homepage banner</h3><p class="field-help">Upload the image displayed on the project card. It can be different from the project gallery images.</p><div class="cover-editor-preview" id="project-cover-preview">${cover?`<img src="${esc(cover.src)}" alt="Cover preview">`:'<div class="cover-empty">No cover selected</div>'}</div>
- <div class="form-grid"><div class="field"><label>Choose existing image</label><select name="coverMediaId" id="project-cover-select"><option value="">No cover</option>${db.media.filter(m=>m.type?.startsWith('image/')).map(m=>`<option value="${esc(m.id)}" ${selectedCoverId===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div><div class="field"><label>Upload a new cover (R2)</label><input type="file" id="project-cover-upload" accept="image/png,image/jpeg,image/webp,image/avif,image/gif"><small class="sub">PNG, JPEG, WebP, AVIF or GIF. Uploading creates a media item; saving the project attaches it.</small></div></div></div>
+ <div class="form-grid"><div class="field"><label for="project-cover-search">Search cover images</label><input id="project-cover-search" type="search" autocomplete="off" placeholder="Find an uploaded cover..."><label for="project-cover-select">Choose existing image (newest first)</label><select name="coverMediaId" id="project-cover-select"><option value="">No cover</option>${mediaNewestFirst().filter(m=>m.type?.startsWith('image/')).map(m=>`<option value="${esc(m.id)}" ${selectedCoverId===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div><div class="field"><label>Upload a new cover (R2)</label><input type="file" id="project-cover-upload" accept="image/png,image/jpeg,image/webp,image/avif,image/gif"><small class="sub">PNG, JPEG, WebP, AVIF or GIF. Uploading creates a media item; saving the project attaches it.</small></div></div></div>
  <div class="panel"><h3>Areas / specializations (multiple)</h3><p class="field-help">A project can appear under Backend, AI, Frontend, Automation, IoT, or any combination. Tick existing areas, and optionally add more below.</p><div class="selector-grid">${uniqueTracks.map(t=>`<label class="inline-checkbox"><input type="checkbox" name="trackExisting" value="${esc(t)}" ${chosenTracks.includes(t)?'checked':''}>${esc(t)}</label>`).join('')}</div>${tagField('trackNew','Additional areas',chosenTracks.filter(x=>!uniqueTracks.includes(x)))}</div>
  <div class="form-grid">${tagField('stack','Tech stack',p?.stack||[])}${textField('year','Year',p?.year||String(new Date().getFullYear()))}</div>
  <div class="form-grid form-grid-three">${tagField('features','Highlights EN',p?.features||[],'newline')}${tagField('featuresAr','أهم المميزات AR',p?.featuresAr||[],'newline',true)}${tagField('featuresEs','Características ES',p?.featuresEs||[],'newline')}</div>
@@ -370,7 +378,7 @@ case 'project':{
  <div class="form-grid">${textField('status','Status (Completed / In progress)',p?.status||'Completed')}<div class="field"><label>Fallback visual theme (when no project image exists)</label><select name="tone">${[['blue','Blue'],['gold','Gold'],['rose','Rose'],['violet','Violet']].map(([v,l])=>`<option value="${v}" ${(p?.tone||'blue')===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
  <div class="form-grid">${textField('github','GitHub URL (optional)',p?.github)}${textField('demo','Live demo URL (optional)',p?.demo)}</div>
  <div class="panel"><h3>More project links</h3><p class="field-help">One per line: Label | URL. Examples: Contact client | mailto:client@example.com, Technical documentation | https://...</p>${tagField('links','Label | URL',(p?.links||[]).map(x=>x.label+' | '+x.url),'newline')}</div>
- <div class="panel"><h3>Project gallery</h3><p class="field-help">Select files and use ↑ or ↓ to change their order. The cover appears first.</p><div class="media-checklist">${projectMediaRows(p?.mediaIds||[])}</div></div>
+ <div class="panel"><h3>Project gallery</h3><p class="field-help">Selected files keep their gallery order; available media appears newest first. Use ↑ or ↓ to reorder selected files. The cover appears first.</p><div class="field"><label for="project-media-search">Search images and videos</label><input id="project-media-search" type="search" autocomplete="off" placeholder="Find media by filename..."></div><p id="project-media-empty" class="field-help" hidden>No media matching your search.</p><div class="media-checklist">${projectMediaRows(p?.mediaIds||[])}</div></div>
  <div class="check-row"><label><input name="published" type="checkbox" ${p?.published?'checked':''}> Published — visible to visitors and included in sitemap</label><label><input name="featured" type="checkbox" ${p?.featured?'checked':''}> Featured — prioritized in the homepage selected work (not a separate page)</label></div>
  <div class="hero-ctas"><button class="btn primary" type="submit">Save project ✓</button><button class="btn" type="button" data-action="close-modal">Cancel</button></div></form>`;
  break;
@@ -383,7 +391,7 @@ function projectMediaRow(id,name,checked,first=false,last=false){
 }
 function projectMediaRows(ids){
  const selected=[...new Set(ids)];
- const media=new Map(db.media.map(item=>[item.id,item.name]));
+ const media=new Map(mediaNewestFirst().map(item=>[item.id,item.name]));
  return selected.map((id,index)=>projectMediaRow(id,media.get(id)||'Unavailable media',true,index===0,index===selected.length-1)).join('')+
   [...media].filter(([id])=>!selected.includes(id)).map(([id,name])=>projectMediaRow(id,name,false)).join('');
 }
@@ -658,6 +666,40 @@ document.addEventListener('keydown',ev=>{
 document.addEventListener('paste',ev=>{const input=ev.target.closest('.tag-entry');if(!input)return;const text=ev.clipboardData?.getData('text')||'';if(/[\n,]/.test(text)&&input.closest('.tag-editor').dataset.delimiter==='comma'||/\n/.test(text)){ev.preventDefault();addTags(input.closest('.tag-editor'),text)}});
 document.addEventListener('focusout',ev=>{const input=ev.target.closest('.tag-entry');if(input?.value)addTags(input.closest('.tag-editor'),input.value)});
 document.addEventListener('input',ev=>{if(ev.target.id==='contact-address')syncContactMethod(ev.target.form);if(ev.target.id==='project-filter'){ui.search=ev.target.value;$('#projects-table').innerHTML=tableProjects(db.projects.filter(x=>(x.title+' '+(x.tracks||[]).join(' ')).toLowerCase().includes(ui.search.toLowerCase())))}});
+document.addEventListener('input',ev=>{
+ const input=ev.target;
+ if(!['project-media-search','project-cover-search','media-library-search'].includes(input.id))return;
+ const query=String(input.value||'').normalize('NFKC').trim().toLocaleLowerCase();
+ if(input.id==='project-media-search'){
+  const rows=[...document.querySelectorAll('#project-form .media-checklist .project-media-row')];
+  let visible=0;
+  for(const row of rows){
+   const text=row.querySelector('.inline-checkbox')?.textContent||'';
+   const match=text.normalize('NFKC').toLocaleLowerCase().includes(query);
+   row.style.display=match?'':'none';
+   if(match)visible++;
+  }
+  const empty=$('#project-media-empty');if(empty)empty.hidden=visible!==0;
+  return;
+ }
+ if(input.id==='project-cover-search'){
+  const select=$('#project-cover-select');if(!select)return;
+  const chosen=select.value;
+  const matches=mediaNewestFirst().filter(m=>m.type?.startsWith('image/')&&(String(m.name||'').normalize('NFKC').toLocaleLowerCase().includes(query)||m.id===chosen));
+  select.replaceChildren(new Option('No cover',''),...matches.map(m=>new Option(m.name,m.id)));
+  select.value=chosen; // Never clear the selected cover just because of a search.
+  return;
+ }
+ const items=[...document.querySelectorAll('.media-grid .media-item')];
+ let visible=0;
+ for(const item of items){
+  const text=item.querySelector('.info')?.textContent||'';
+  const match=text.normalize('NFKC').toLocaleLowerCase().includes(query);
+  item.style.display=match?'':'none';
+  if(match)visible++;
+ }
+ const empty=$('#media-library-empty');if(empty)empty.hidden=visible!==0;
+});
 document.addEventListener('dragover',ev=>{
  const zone=$('#media-drop-zone');
  if(!zone||!ev.dataTransfer?.types.includes('Files'))return;
@@ -707,7 +749,13 @@ document.addEventListener('change',async ev=>{const x=ev.target;
    db.media.unshift(res);ui.pendingProjectCoverId=res.id;
    const select=$('#project-cover-select');if(select){select.add(new Option(res.name,res.id));select.value=res.id}
    const preview=$('#project-cover-preview');if(preview)preview.innerHTML=`<img src="${esc(res.src)}" alt="Uploaded cover">`;
-   $('.media-checklist')?.insertAdjacentHTML('beforeend',projectMediaRow(res.id,res.name,false));
+   const list=$('.media-checklist');
+   if(list){
+    const firstAvailable=[...list.children].find(row=>!row.querySelector('input[name="mediaIds"]')?.checked);
+    if(firstAvailable)firstAvailable.insertAdjacentHTML('beforebegin',projectMediaRow(res.id,res.name,false));
+    else list.insertAdjacentHTML('beforeend',projectMediaRow(res.id,res.name,false));
+    $('#project-media-search')?.dispatchEvent(new Event('input',{bubbles:true}));
+   }
    toast('Cover uploaded — save the project to attach it');
   }catch(err){toast('Cover upload failed: '+err.message)}finally{x.disabled=false}
  }
