@@ -118,6 +118,28 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Tahoma,s
 .offer-card h3{font-size:clamp(27px,3.5vw,44px)!important;letter-spacing:-1.3px!important;line-height:1.15!important;max-width:650px;color:#fff!important;margin:4px 0 17px!important}
 .offer-card p{max-width:650px;color:#e3e8ff!important;font-size:14px!important;line-height:1.85!important}
 .offer-card .offer-terms{background:#1024557a!important;border:1px solid #ffffff29!important;border-radius:13px!important;color:#d4defb!important;padding:12px 15px!important;font-size:11px!important;max-width:690px;margin:20px 0!important}
+/* Offer T&C: a small trigger, not inline legal text. Native <dialog> manages focus and Escape. */
+.offer-terms-trigger{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:9px 0;border:0;background:transparent;font:inherit;font-size:13px;font-weight:750;line-height:1.5;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+.offer-card .offer-terms-trigger{color:#fff;margin:14px 0 5px}
+.offer-feature .offer-terms-trigger{color:#253aa1;margin:13px 0}
+.offer-terms-trigger:hover{text-decoration-thickness:2px}
+.offer-terms-trigger:focus-visible,.offer-terms-close:focus-visible,.offer-terms-done:focus-visible{outline:3px solid #f6b849;outline-offset:4px}
+.offer-terms-dialog{position:fixed;inset:0;width:min(700px,calc(100vw - 28px));max-width:700px;max-height:min(86dvh,820px);padding:0;border:1px solid #cfdbf5;border-radius:22px;background:#fff;color:#162440;box-shadow:0 28px 100px #071a3880;overflow:auto;overscroll-behavior:contain;color-scheme:light}
+.offer-terms-dialog::backdrop{background:#071632b3;backdrop-filter:blur(5px)}
+.offer-terms-dialog-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:26px 30px 20px;background:#f7f9ff;border-bottom:1px solid #e2e9f7}
+.offer-terms-dialog-head h2{margin:5px 0 8px;font-size:clamp(22px,4vw,30px);font-weight:800;letter-spacing:-.5px;color:#1b2a54}
+.offer-terms-dialog-head p{margin:0;color:#52627c;font-size:14px;line-height:1.7}
+.offer-terms-kicker{font-size:10px;letter-spacing:1.3px;font-weight:800;color:#3c59b4}
+.offer-terms-close{flex:none;display:grid;place-items:center;width:42px;height:42px;border:1px solid #dbe4f3;background:#fff;border-radius:12px;color:#283f68;cursor:pointer;font-size:18px}
+.offer-terms-dialog-body{padding:25px 32px 12px;color:#273650;font-size:15px;line-height:1.95;overflow-wrap:anywhere}
+.offer-terms-dialog-body p{margin:0 0 15px;white-space:normal}
+.offer-terms-dialog-body ul,.offer-terms-dialog-body ol{list-style-position:outside;margin:0 0 20px;padding-inline-start:1.65em}
+.offer-terms-dialog-body li{display:list-item;margin:0 0 10px;padding-inline-start:5px;line-height:1.8}
+.offer-terms-dialog-body ul{list-style-type:disc}
+.offer-terms-dialog-body ol{list-style-type:decimal}
+.offer-terms-dialog-foot{position:sticky;bottom:0;display:flex;justify-content:flex-end;padding:15px 30px;background:#fff;border-top:1px solid #e4eaf6}
+.offer-terms-done{border:0;border-radius:11px;background:#2949c5;color:white;padding:11px 26px;font-size:14px;font-weight:750;cursor:pointer}
+@media(max-width:520px){.offer-terms-dialog{max-height:90dvh;border-radius:16px}.offer-terms-dialog-head{padding:20px 18px 15px}.offer-terms-dialog-body{padding:18px 20px 9px;font-size:14px}.offer-terms-dialog-foot{padding:12px 18px}}
 .offer-card .btn.primary{background:#fff!important;color:#2a44b9!important;border-color:#fff!important;box-shadow:0 10px 25px #11256748!important;margin-top:6px}
 .offer-visual{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#e0e6ff;font-weight:800;text-align:center}
 .offer-circle{display:grid;place-items:center;width:min(19vw,205px);height:min(19vw,205px);min-width:140px;min-height:140px;border-radius:50%;background:radial-gradient(circle at 35% 25%,#b5c4ff9c,#ffffff13 60%);border:1px solid #ffffff6b;box-shadow:0 0 90px #a8bcff74,inset 0 0 45px #d9e4ff50;font-size:89px;color:#f8faff;transform:rotate(-15deg)}
