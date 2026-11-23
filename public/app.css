@@ -381,3 +381,32 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Tahoma,s
 .inbox-message{white-space:pre-wrap;overflow-wrap:anywhere}
 .inbox-tabs{margin-bottom:14px}
 .inbox-tabs [aria-pressed="true"]{background:#344d8a;color:#fff}
+/* Horizontal certificate gallery: scrollable without JS; images stay lazy-loaded. */
+.certificates-section .cert-carousel{min-width:0;position:relative}
+.certificates-section .cert-carousel-nav{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:0 0 14px}
+.certificates-section .cert-carousel-arrow{width:42px;height:42px;border:1px solid #d3ddf5;border-radius:50%;background:#fff;color:#364fb7;display:grid;place-items:center;font-size:29px;line-height:1;cursor:pointer;box-shadow:0 5px 12px #263a6812}
+.certificates-section .cert-carousel-arrow:hover{background:#eaf0ff;border-color:#9eb0f0}
+.certificates-section .cert-carousel-arrow:focus-visible,.cert-preview-button:focus-visible,.cert-view-link:focus-visible,.cert-post-link:focus-visible{outline:3px solid #5977ea;outline-offset:3px}
+.certificates-section .cert-carousel-track{display:flex;gap:18px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-inline:4px;overscroll-behavior-inline:contain;padding:5px 4px 22px;scrollbar-width:thin;scrollbar-color:#bdc8e5 #edf1f8}
+.certificates-section .cert-carousel-track>.cert-card{flex:0 0 calc((100% - 36px)/3);max-width:calc((100% - 36px)/3);min-width:0;scroll-snap-align:start;align-self:stretch}
+.cert-preview-button{display:block;width:100%;padding:0;margin:0;background:transparent;border:0;border-radius:16px;cursor:zoom-in;text-align:inherit}
+.cert-preview-button .cert-image{width:100%}
+.cert-preview-button:hover .cert-image img{transform:scale(1.035)}
+.cert-preview-button .cert-image img{transition:transform .2s ease}
+.certificates-section .cert-image-empty{display:grid;place-items:center;color:#7c91ca;font-size:50px}
+.certificates-section .cert-body{display:flex;flex-direction:column;min-height:132px}
+.certificates-section .cert-actions{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:auto;padding-bottom:1px}
+.certificates-section .cert-view-link,.certificates-section .cert-post-link{font:750 11px/1.4 Inter,'Segoe UI',system-ui,sans-serif;color:#3654bb;text-decoration:none;border-radius:8px;border:1px solid #d9e2f8;background:#f3f6ff;padding:9px 11px;cursor:pointer;white-space:normal}
+.certificates-section .cert-post-link{background:#eaf4ff;color:#185695;border-color:#cce2fb}
+.certificates-section .cert-view-link:hover,.certificates-section .cert-post-link:hover{background:#dce7ff}
+.certificate-viewer{box-sizing:border-box;width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;padding:clamp(10px,2.2vw,30px);border:0;background:transparent;color:#fff;overflow:hidden}
+.certificate-viewer::backdrop{background:rgba(4,11,25,.94);backdrop-filter:blur(8px)}
+.certificate-viewer-panel{height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;gap:9px}
+.certificate-viewer-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:45px;color:#fff}
+.certificate-viewer-bar strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.certificate-viewer-close{flex-shrink:0;border:1px solid #ffffff66;background:#fff;color:#1e3156;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer}
+.certificate-viewer-content{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden}
+.certificate-viewer-content img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:6px;box-shadow:0 16px 60px #0006}
+@media(max-width:930px){.certificates-section .cert-carousel-track>.cert-card{flex-basis:calc((100% - 18px)/2);max-width:calc((100% - 18px)/2)}}
+@media(max-width:590px){.certificates-section .cert-carousel-track>.cert-card{flex-basis:min(82vw,330px);max-width:min(82vw,330px)}.certificate-viewer-bar strong{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.cert-preview-button .cert-image img{transition:none}}
