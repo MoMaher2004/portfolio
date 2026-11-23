@@ -138,7 +138,74 @@ function coverArt(p){
    : video ? videoThumbnail(video.src) : `<div class="cover-gradient cover-empty theme-${['blue','gold','rose','violet'].includes(p.tone)?p.tone:'blue'}" aria-label="No project cover uploaded"><div class="cover-pattern"></div></div>`;
 }
 function projectCard(p){return `<a class="project-card" href="/projects/${encodeURIComponent(p.id)}"><div class="card-poster">${coverArt(p)}<span class="card-numeral">${esc(p.year)}</span></div><div class="card-body"><div class="card-kicker"><span>${esc(loc(p,'category'))}</span><span class="card-arrow">↗</span></div><h3>${esc(loc(p,'title'))}</h3><p>${esc(loc(p,'summary'))}</p><div class="pills">${(p.tracks||[]).slice(0,3).map(x=>`<span class="pill pill-track">${esc(x)}</span>`).join('')}</div></div></a>`}
-function socialLinks(){return db.socials.filter(s=>cleanUrl(s.url)!=='#').map(s=>`<a class="social-chip" href="${esc(cleanUrl(s.url))}" rel="noopener noreferrer" target="_blank"><span class="social-glyph">${s.label.toLowerCase().includes('github')?'⌘':s.label.toLowerCase().includes('linkedin')?'in':s.label.toLowerCase().includes('email')?'✉':'↗'}</span>${esc(s.label)} <span>↗</span></a>`).join('')}
+// All icons are inline SVGs, so social links work without third-party icon fonts or CDNs.
+// Only fixed SVG markup is interpolated; user-provided labels/URLs remain escaped.
+const socialIconShapes={
+ phone:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.49 19.49 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.2 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.7 2.79a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.33 1.83.57 2.79.7A2 2 0 0 1 22 16.92Z"/>',
+ email:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/>',
+ whatsapp:'<path fill="currentColor" stroke="none" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 2a8 8 0 1 1-4.5 14.6l-.4-.2-2.3.6.6-2.3-.2-.4A8 8 0 0 1 12 4Zm-3 3c-.8 0-1.4.7-1.4 1.6 0 2.8 3.4 6.3 6.6 7.1 1.3.3 2.5-.3 2.5-1.4v-.6l-2.5-1.2-.9 1a7 7 0 0 1-3.3-3.2l.7-.9L9.8 7H9Z"/>',
+ telegram:'<path fill="currentColor" stroke="none" d="M21.5 4.1 2.9 11.3c-1.3.5-1.3 1.2-.2 1.6l4.8 1.5 1.9 5.8c.2.7.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3-15.4c.3-1.2-.5-1.8-1.5-1.6ZM9.2 14l10.1-6.4c.5-.3.9-.1.5.2l-8.3 7.5-.3 3.3Z"/>',
+ tiktok:'<path fill="currentColor" stroke="none" d="M16.8 2h-3.7v12.4a3.4 3.4 0 1 1-3.4-3.4c.35 0 .7.05 1.02.15V7.4a7.1 7.1 0 1 0 6.08 7.02V8.1A8.1 8.1 0 0 0 22 9.7V6a4.5 4.5 0 0 1-5.2-4Z"/>',
+ facebook:'<path fill="currentColor" stroke="none" d="M13.36 22v-8.75h2.94l.44-3.5h-3.38V7.52c0-1.01.28-1.7 1.69-1.7h1.81V2.69A24.3 24.3 0 0 0 14.22 2C11.6 2 9.8 3.6 9.8 6.55v3.2H6.85v3.5H9.8V22h3.56Z"/>',
+ instagram:'<rect x="2.6" y="2.6" width="18.8" height="18.8" rx="5"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.65" cy="6.5" r="1.15" fill="currentColor" stroke="none"/>',
+ youtube:'<rect x="2" y="5.4" width="20" height="13.2" rx="4"/><path d="m10 9 5.5 3-5.5 3V9Z" fill="currentColor" stroke="none"/>',
+ linkedin:'<path fill="currentColor" stroke="none" d="M4.98 3.5a2.08 2.08 0 1 0 0 4.16 2.08 2.08 0 0 0 0-4.16ZM3.3 9.1h3.35V21H3.3V9.1Zm5.45 0h3.2v1.63H12a3.55 3.55 0 0 1 3.2-1.83c3.43 0 4.07 2.26 4.07 5.18V21h-3.34v-6.13c0-1.46-.03-3.33-2.03-3.33-2.04 0-2.35 1.6-2.35 3.22V21H8.75V9.1Z"/>',
+ github:'<path fill="currentColor" stroke="none" d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.49.5.092.683-.217.683-.483 0-.238-.01-.87-.015-1.707-2.782.605-3.369-1.18-3.369-1.18-.454-1.155-1.11-1.462-1.11-1.462-.91-.622.069-.609.069-.609 1.006.071 1.535 1.033 1.535 1.033.895 1.533 2.349 1.09 2.922.833.091-.648.35-1.09.636-1.34-2.22-.253-4.555-1.11-4.555-4.942 0-1.092.39-1.984 1.03-2.684-.103-.253-.447-1.272.098-2.65 0 0 .84-.269 2.75 1.025A9.6 9.6 0 0 1 12 6.84c.85.004 1.705.115 2.504.337 1.909-1.294 2.748-1.025 2.748-1.025.547 1.378.202 2.397.1 2.65.64.7 1.028 1.592 1.028 2.684 0 3.842-2.338 4.687-4.566 4.933.359.31.679.92.679 1.855 0 1.34-.012 2.42-.012 2.75 0 .267.18.58.688.482A10.013 10.013 0 0 0 22 12c0-5.523-4.477-10-10-10Z"/>',
+ x:'<path d="m4 3 16 18M20 3 4 21" stroke-width="2.2"/>',
+ twitter:'<path fill="currentColor" stroke="none" d="M21.6 6.1c-.7.3-1.4.5-2.2.6a3.7 3.7 0 0 0 1.6-2.1c-.7.4-1.5.7-2.4.9a3.7 3.7 0 0 0-6.3 3.4c0 .3 0 .6.1.9a10.5 10.5 0 0 1-7.6-3.8 3.7 3.7 0 0 0 1.1 4.9c-.6 0-1.1-.2-1.7-.5v.1a3.7 3.7 0 0 0 3 3.6c-.6.2-1.2.2-1.7.1a3.7 3.7 0 0 0 3.5 2.6 7.5 7.5 0 0 1-4.6 1.6c-.3 0-.6 0-.9-.1a10.6 10.6 0 0 0 5.8 1.7c7 0 10.8-5.8 10.8-10.8v-.5c.7-.5 1.3-1.1 1.8-1.8Z"/>',
+ discord:'<path d="M7.4 6.2 9 5.6l.6 1.1c1.6-.3 3.2-.3 4.8 0l.6-1.1 1.6.6c1.9 2.5 2.5 5.2 2.2 8.9-1.3 1-2.4 1.6-3.7 2.1l-.9-1.4m-7.4 0-.9 1.4c-1.3-.5-2.5-1.1-3.7-2.1-.3-3.7.3-6.4 2.2-8.9"/><path d="M8.5 15.8c2.3 1.4 4.7 1.4 7 0"/><circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/>',
+ pinterest:'<circle cx="12" cy="12" r="9"/><path d="m9.7 19.9 2.2-8.8c-.4-1.5.3-3.3 2.2-3.3 1.5 0 2.1 1 1.8 2.3-.3 2-1.9 5.3-4.4 4.5-1.4-.4-2-2.3-1.6-4.1.8-3.9 5.6-5.1 8.3-2.4 3.1 3.1 1.2 9.4-3.5 10.1"/>',
+ snapchat:'<path d="M12 3.2c-2.9 0-4.9 2.2-4.9 5.4v2.8c-.7-.2-1.4-.8-2-.3-.5.5.2 1 1.1 1.4.9.4 1 1.1.5 1.9-.8 1.3-2.2 2.3-3.6 2.7.8.8 2 1 3 1.3.6.2.8 1.1 1 1.5 1.6-.3 3.1-.2 4.9 1.1 1.8-1.3 3.3-1.4 4.9-1.1.2-.4.4-1.3 1-1.5 1-.3 2.2-.5 3-1.3-1.4-.4-2.8-1.4-3.6-2.7-.5-.8-.4-1.5.5-1.9.9-.4 1.6-.9 1.1-1.4-.6-.5-1.3.1-2 .3V8.6c0-3.2-2-5.4-4.9-5.4Z"/>',
+ reddit:'<circle cx="12" cy="14" r="7.5"/><circle cx="9" cy="13.7" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="13.7" r=".9" fill="currentColor" stroke="none"/><path d="M9.5 16.7c1.7 1.2 3.3 1.2 5 0M12 6.5l1.7-3.3 3.2.6"/><circle cx="18.3" cy="8.3" r="1.5"/>',
+ threads:'<circle cx="12" cy="12" r="9"/><path d="M16.5 9.3c-.7-2.3-2.3-3.3-4.5-3.3-3.7 0-5.1 2.8-5.1 6.2 0 3.6 1.8 5.9 5.1 5.9 3.2 0 4.7-1.8 4.7-4.4 0-2.2-1.8-3.4-4.2-3.4-1.6 0-2.7.7-2.7 2.1 0 1.3 1.1 2 2.4 2 2.8 0 4.3-2.1 4.3-4.8"/>',
+ website:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>',
+ link:'<path d="M10 13.5a5 5 0 0 0 7.5.5l2.1-2.1a5 5 0 0 0-7.1-7.1l-1.2 1.2M14 10.5a5 5 0 0 0-7.5-.5L4.4 12a5 5 0 0 0 7.1 7.1l1.2-1.2"/>'
+};
+const socialIconHosts=[
+ ['whatsapp',['wa.me','whatsapp.com']],['telegram',['t.me','telegram.me','telegram.org']],
+ ['tiktok',['tiktok.com']],['facebook',['facebook.com','fb.com','fb.me']],
+ ['instagram',['instagram.com']],['youtube',['youtube.com','youtu.be']],
+ ['linkedin',['linkedin.com']],['github',['github.com']],['x',['x.com']],
+ ['twitter',['twitter.com']],['discord',['discord.com','discord.gg']],
+ ['pinterest',['pinterest.com']],['snapchat',['snapchat.com']],['reddit',['reddit.com']],
+ ['threads',['threads.com','threads.net']]
+];
+const socialIconLabels=[
+ ['whatsapp',/whats\s?app|واتس/],['telegram',/telegram|تل[ي]?جرام|تيليجرام/],
+ ['tiktok',/tik\s?tok|تيك\s?توك/],['facebook',/facebook|فيس\s?بوك/],
+ ['instagram',/instagram|insta|انست[اجغ]?رام|إنست[اجغ]?رام/],
+ ['youtube',/youtube|يوتيوب/],['linkedin',/linked\s?in|لينكد/],
+ ['github',/git\s?hub|جيت\s?هاب|جيت\s?هب/],
+ ['twitter',/twitter|تويتر/],['x',/^x$|^إكس$/],
+ ['discord',/discord|ديسكورد/],['pinterest',/pinterest|بنترست/],
+ ['snapchat',/snapchat|سناب/],['reddit',/reddit|ريديت/],
+ ['threads',/threads|ثريدز/],['phone',/phone|mobile|call|telephone|تليفون|تلفون|هاتف|موبايل|اتصال|رقم\s?(الهاتف|التليفون)/],
+ ['email',/e-?mail|بريد|ايميل|إيميل/],['website',/website|web\s?site|portfolio|موقع/]
+];
+function socialIconType(label,url){
+ let parsed;
+ try{parsed=new URL(url)}catch{return 'link'}
+ if(parsed.protocol==='tel:')return 'phone';
+ if(parsed.protocol==='mailto:')return 'email';
+ if(!['http:','https:'].includes(parsed.protocol))return 'link';
+ const host=parsed.hostname.toLowerCase().replace(/^www\./,'');
+ for(const [type,domains] of socialIconHosts){
+  if(domains.some(domain=>host===domain||host.endsWith('.'+domain)))return type;
+ }
+ const name=String(label||'').toLowerCase().trim();
+ for(const [type,pattern] of socialIconLabels)if(pattern.test(name))return type;
+ return 'website';
+}
+function socialIcon(label,url){
+ const type=socialIconType(label,url);
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">${socialIconShapes[type]||socialIconShapes.link}</svg>`;
+}
+function socialLinks(){
+ return db.socials.map(s=>({label:s.label||'',url:cleanUrl(s.url)})).filter(s=>s.url!=='#').map(s=>{
+  const external=/^https?:/i.test(s.url);
+  return `<a class="social-chip" href="${esc(s.url)}" ${external?'target="_blank" rel="noopener noreferrer"':''}><span class="social-glyph">${socialIcon(s.label,s.url)}</span>${esc(s.label)} <span aria-hidden="true">↗</span></a>`;
+ }).join('');
+}
 function certVisual(c,i){const src=c.image||"";return src?`<div class="cert-image"><img src="${esc(src)}" alt="${esc(loc(c,'alt')||loc(c,'title')+' certificate')}" decoding="async" loading="lazy"><span class="cert-img-badge">✦ Credential</span></div>`:``}
 function certificateMock(c,i){const colors=[['#e4eaff','#3546ae'],['#e8e8f7','#4d4c86'],['#e7f1f3','#277988'],['#f9ede8','#9a6550']][i%4],text=esc(c.issuer||'CERTIFICATE').replace(/&/g,'&amp;');const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="850" height="550" viewBox="0 0 850 550"><rect width="850" height="550" fill="${colors[0]}"/><rect x="40" y="40" width="770" height="470" rx="26" fill="#fff" stroke="${colors[1]}" stroke-opacity=".15" stroke-width="3"/><circle cx="697" cy="137" r="53" fill="${colors[0]}"/><path d="M697 98l12 27 30 3-23 21 6 30-25-14-26 14 6-30-23-21 31-3z" fill="${colors[1]}"/><text x="85" y="126" font-size="18" font-family="Arial" fill="${colors[1]}" font-weight="700" letter-spacing="6">CERTIFICATE</text><rect x="85" y="158" width="145" height="5" rx="3" fill="${colors[1]}"/><text x="85" y="282" font-size="54" font-family="Arial" fill="#17243a" font-weight="700">Achievement</text><text x="85" y="333" font-size="25" font-family="Arial" fill="#5f7085">Verified learning &amp; training</text><text x="85" y="453" font-size="23" font-family="Arial" fill="${colors[1]}">${text.slice(0,32)}</text><path d="M670 464h96" stroke="${colors[1]}" stroke-width="4"/></svg>`;return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg)}
 function moveIn(key,id,direction){const items=db[key],n=items.findIndex(x=>x.id===id),to=n+direction;if(n<0||to<0||to>=items.length)return;[items[n],items[to]]=[items[to],items[n]];save();render(true)}
