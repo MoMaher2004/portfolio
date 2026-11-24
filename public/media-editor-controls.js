@@ -1,4 +1,4 @@
-import {geometry, VIDEO_FORMATS} from './media-transform.js';
+import {geometry, axisScales, videoBudget, VIDEO_FORMATS} from './media-transform.js';
 
 export function filenameParts(name){
  const value=String(name||'media');const dot=value.lastIndexOf('.');
@@ -41,36 +41,51 @@ export function mountVisualEditor(host,file,kind,getOptions,changed){
  const sourceLabel=element('p','small','Source · drag edges/corners to crop, or drag inside to move');
  const reset=element('button','btn sm','Reset crop');reset.type='button';
  const outputLabel=element('p','small','Output preview');const canvas=element('canvas','media-v2-output');
- const stage=element('div','media-v2-output-stage'),scaled=element('div','media-v2-scaled');const resize=element('button','media-v2-scale-handle','↘');resize.type='button';resize.title='Drag to resize output';resize.setAttribute('aria-label','Drag to resize output (use maximum-side input for keyboard)');
- const details=element('p','small');const scaleLabel=element('label','media-v2-scale-range','Scale output');const range=element('input');range.type='range';range.min='1';range.max='100';range.step='1';scaleLabel.append(range);
- frame.append(source,box);scaled.append(canvas,resize);stage.append(scaled);host.replaceChildren(sourceLabel,frame,reset,outputLabel,stage,scaleLabel,details);
+ const stage=element('div','media-v2-output-stage'),scaled=element('div','media-v2-scaled');
+ const handles=['e','s','se'].map(axis=>{const node=element('button','media-v2-scale-handle',axis==='e'?'↔':axis==='s'?'↕':'↘');node.type='button';node.dataset.axis=axis;node.title=axis==='e'?'Resize width':axis==='s'?'Resize height':'Resize both axes';node.setAttribute('aria-label',node.title);return node;});
+ const details=element('p','small');const sourceDetails=element('p','small media-source-details','Reading original dimensions…');const budgetDetails=element('p','small media-budget-details');
+ const sizeControls=element('div','media-axis-controls');
+ const axes=['x','y'].map(axis=>{const label=element('label','media-v2-scale-range',axis==='x'?'Width (px)':'Height (px)');const number=element('input');number.type='number';number.min=kind==='video'?'2':'1';number.step=kind==='video'?'2':'1';number.setAttribute('aria-label',axis==='x'?'Output width in pixels':'Output height in pixels');const slider=element('input');slider.type='range';slider.min='1';slider.max='100';slider.step='1';slider.setAttribute('aria-label',axis==='x'?'Width scale percentage':'Height scale percentage');label.append(number,slider);sizeControls.append(label);return {axis,number,slider};});
+ const resetSize=element('button','btn sm','Reset scale');resetSize.type='button';sizeControls.append(resetSize);
+ frame.append(source,box);scaled.append(canvas,...handles);stage.append(scaled);host.replaceChildren(sourceDetails,sourceLabel,frame,reset,outputLabel,stage,sizeControls,details,budgetDetails);
  let disposed=false,raf=0,ready=false,sourceWidth=0,sourceHeight=0;
  const getDimensions=()=>kind==='video'?[source.videoWidth,source.videoHeight]:[source.naturalWidth,source.naturalHeight];
  const invalidate=()=>{if(disposed||raf)return;raf=requestAnimationFrame(draw);};
  function metrics(){const o=getOptions();return geometry(sourceWidth,sourceHeight,o,kind==='video');}
- function draw(){raf=0;if(disposed||!ready)return;const o=getOptions(),original=o.format==='original';box.hidden=original;reset.hidden=original;stage.hidden=original;scaleLabel.hidden=original;outputLabel.hidden=original;
-  if(original){details.textContent=`Original: ${sourceWidth} × ${sourceHeight} px (unchanged)`;return;}
+ function draw(){raf=0;if(disposed||!ready)return;const o=getOptions(),original=o.format==='original';box.hidden=original;reset.hidden=original;stage.hidden=original;sizeControls.hidden=original;outputLabel.hidden=original;
+  const mib=n=>(n/1048576).toFixed(2)+' MiB';
+  const duration=kind==='video'?source.duration:0;
+  sourceDetails.textContent=`Original: ${sourceWidth} × ${sourceHeight} px · ${mib(file.size)}${kind==='video'&&Number.isFinite(duration)?` · ${duration.toFixed(1)} s`:''}`;
+  budgetDetails.textContent='';
+  if(kind==='video'&&!original){try{const b=videoBudget(file.size,duration,o);budgetDetails.textContent=`Source average: ${b.sourceKbps.toFixed(1)} kbps · Target video: ${b.videoKbps} kbps${o.audio?` + audio ${b.audioKbps} kbps`:''} · Estimated output: ${mib(b.estimatedBytes)} (not guaranteed)`;}catch(e){budgetDetails.textContent=e.message;}}
+  if(original){details.textContent='Output: original dimensions and file size (unchanged)';return;}
   try{const g=metrics();box.style.inset=`${o.top}% ${o.right}% ${o.bottom}% ${o.left}%`;
-   const previewFit=Math.min(1,Math.max(1,Math.min(360,host.clientWidth-16))/g.w,220/g.h),ratio=Math.min(1,Math.max(g.outWidth,g.outHeight)/Math.max(g.w,g.h));
-   const displayWidth=Math.max(1,Math.round(g.w*previewFit*ratio)),displayHeight=Math.max(1,Math.round(g.h*previewFit*ratio));
+   const previewFit=Math.min(1,Math.max(1,Math.min(360,host.clientWidth-32))/g.w,220/g.h);
+   const displayWidth=Math.max(1,Math.round(g.outWidth*previewFit)),displayHeight=Math.max(1,Math.round(g.outHeight*previewFit));
    stage.style.width=`${Math.max(1,Math.round(g.w*previewFit))}px`;stage.style.height=`${Math.max(1,Math.round(g.h*previewFit))}px`;
    scaled.style.width=`${displayWidth}px`;scaled.style.height=`${displayHeight}px`;
    // Reuse the small canvas. Its pixel area is capped independently of output size.
    if(canvas.width!==displayWidth)canvas.width=displayWidth;if(canvas.height!==displayHeight)canvas.height=displayHeight;
-   const ctx=canvas.getContext('2d');ctx.clearRect(0,0,displayWidth,displayHeight);if(o.format==='image/jpeg'){ctx.fillStyle='#fff';ctx.fillRect(0,0,displayWidth,displayHeight);}ctx.drawImage(source,g.x,g.y,g.w,g.h,0,0,displayWidth,displayHeight);
-   range.value=String(Math.max(1,Math.round(ratio*100)));details.textContent=`Crop ${g.w} × ${g.h} px → output ${g.outWidth} × ${g.outHeight} px (${Math.round(ratio*100)}%) · geometric preview`;
+   const ctx=canvas.getContext('2d');ctx.clearRect(0,0,displayWidth,displayHeight);if(o.format==='image/jpeg'){ctx.fillStyle='#fff';ctx.fillRect(0,0,displayWidth,displayHeight);}if(kind!=='video'||source.readyState>=2)ctx.drawImage(source,g.x,g.y,g.w,g.h,0,0,displayWidth,displayHeight);
+   for(const {axis,number,slider} of axes){const out=axis==='x'?g.outWidth:g.outHeight,crop=axis==='x'?g.w:g.h;number.max=String(crop);if(document.activeElement!==number)number.value=String(out);slider.value=String(Math.max(1,Math.round(out/crop*100)));}
+   details.textContent=`Crop: ${g.w} × ${g.h} px → Output: ${g.outWidth} × ${g.outHeight} px · X ${(g.outWidth/g.w*100).toFixed(1)}% / Y ${(g.outHeight/g.h*100).toFixed(1)}%${kind==='video'?' · even dimensions for encoding':''}`;
   }catch(e){details.textContent=e.message;}
  }
  function update(patch){changed(patch);invalidate();}
- function setScale(percent){try{const g=metrics(),limit=kind==='video'?1920:8192;const maxSide=clamp(Math.round(Math.max(g.w,g.h)*percent/100),kind==='video'?2:1,limit);update({maxSide});}catch(e){details.textContent=e.message;}}
- range.addEventListener('input',()=>setScale(Number(range.value)));
+ function setDimensions(g,width,height){try{const min=kind==='video'?2:1;update(axisScales(g.w,g.h,clamp(width,min,g.w),clamp(height,min,g.h)));}catch(e){details.textContent=e.message;}}
+ for(const {axis,number,slider} of axes){
+  number.addEventListener('change',()=>{try{const g=metrics(),value=Number(number.value);if(!Number.isFinite(value)||value<1)throw Error('Enter a positive dimension.');setDimensions(g,axis==='x'?value:g.outWidth,axis==='y'?value:g.outHeight);}catch(e){details.textContent=e.message;}invalidate();});
+  number.addEventListener('blur',invalidate);
+  slider.addEventListener('input',()=>{try{const g=metrics(),ratio=Number(slider.value)/100;setDimensions(g,axis==='x'?g.w*ratio:g.outWidth,axis==='y'?g.h*ratio:g.outHeight);}catch(e){details.textContent=e.message;}});
+ }
+ resetSize.addEventListener('click',()=>update({scaleX:null,scaleY:null}));
  reset.addEventListener('click',()=>update({left:0,top:0,right:0,bottom:0}));
  for(const handle of ['nw','n','ne','e','se','s','sw','w']){const n=element('span','media-v2-crop-handle');n.dataset.handle=handle;box.append(n);}
  drag(box,e=>{if(!ready||getOptions().format==='original')return;const rect=frame.getBoundingClientRect();return {o:{...getOptions()},handle:e.target.dataset.handle||'move',w:rect.width,h:rect.height};},(start,dx,dy)=>update(draggedCrop(start.o,start.handle,dx/start.w*100,dy/start.h*100)));
- drag(resize,()=>{if(!ready||getOptions().format==='original')return;try{const g=metrics(),rect=stage.getBoundingClientRect();return {ratio:Math.max(g.outWidth,g.outHeight)/Math.max(g.w,g.h),w:rect.width,h:rect.height};}catch{return null;}},(start,dx,dy)=>{const delta=(Math.abs(dx/start.w)>Math.abs(dy/start.h)?dx/start.w:dy/start.h);setScale(clamp((start.ratio+delta)*100,1,100));});
+ for(const handle of handles)drag(handle,()=>{if(!ready||getOptions().format==='original')return;try{const g=metrics(),rect=stage.getBoundingClientRect();return {g,w:Math.max(1,rect.width-2),h:Math.max(1,rect.height-2)};}catch{return null;}},(start,dx,dy)=>{const {g,w,h}=start,axis=handle.dataset.axis;setDimensions(g,g.outWidth+(axis.includes('e')?dx*g.w/w:0),g.outHeight+(axis.includes('s')?dy*g.h/h:0));});
  function loaded(){if(disposed)return;[sourceWidth,sourceHeight]=getDimensions();ready=sourceWidth>0&&sourceHeight>0;if(ready)invalidate();}
  source.addEventListener(kind==='video'?'loadeddata':'load',loaded);source.addEventListener('error',()=>{if(!disposed)details.textContent='Preview unavailable: this browser cannot decode the source.';});
- if(kind==='video'){source.muted=true;source.playsInline=true;source.preload='metadata';source.addEventListener('loadedmetadata',()=>{if(source.readyState>=2)loaded();});source.addEventListener('seeked',loaded);const scrub=element('input');scrub.type='range';scrub.min='0';scrub.max='1000';scrub.value='0';scrub.setAttribute('aria-label','Preview video position');scrub.addEventListener('input',()=>{if(Number.isFinite(source.duration))source.currentTime=source.duration*Number(scrub.value)/1000;});host.insertBefore(scrub,reset);}
+ if(kind==='video'){source.muted=true;source.playsInline=true;source.preload='metadata';source.addEventListener('loadedmetadata',loaded);source.addEventListener('durationchange',invalidate);source.addEventListener('seeked',loaded);const scrub=element('input');scrub.type='range';scrub.min='0';scrub.max='1000';scrub.value='0';scrub.setAttribute('aria-label','Preview video position');scrub.addEventListener('input',()=>{if(Number.isFinite(source.duration))source.currentTime=source.duration*Number(scrub.value)/1000;});host.insertBefore(scrub,reset);}
  else source.alt='Source image';source.src=url;
  return {refresh:invalidate,dispose(){disposed=true;cancelAnimationFrame(raf);if(kind==='video'){source.pause();source.removeAttribute('src');source.load();}else source.removeAttribute('src');canvas.width=canvas.height=1;URL.revokeObjectURL(url);host.replaceChildren();}};
 }

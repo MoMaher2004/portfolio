@@ -1,4 +1,4 @@
-import {MAX_UPLOAD,MAX_IMAGE_PIXELS,IMAGE_TYPES,VIDEO_FORMATS,mediaType,mediaKind,mimeBase,geometry,outputName,defaults,validateOptions,checkUpload} from './media-transform.js';
+import {MAX_UPLOAD,MAX_IMAGE_PIXELS,IMAGE_TYPES,VIDEO_FORMATS,mediaType,mediaKind,mimeBase,geometry,outputName,defaults,validateOptions,checkUpload,videoBudget} from './media-transform.js';
 import {filenameParts,namedOutput,outputExtension,mountVisualEditor} from './media-editor-controls.js';
 const abortError=()=>new DOMException('Conversion cancelled','AbortError');
 const ensureActive=signal=>{if(signal.aborted)throw abortError();};
@@ -51,15 +51,15 @@ async function transcodeVideo(file,o,signal,progress,audioContext,host){
   stage='Source validation and output dimensions';
   if(!Number.isFinite(video.duration)||video.duration<=0)throw Error('A finite, decodable video is required.');
   if(video.videoWidth*video.videoHeight>3840*2160)throw Error('Source video exceeds 4K. Use a smaller source to protect this device.');
-  const g=geometry(video.videoWidth,video.videoHeight,o,true);if(g.outWidth*g.outHeight>1920*1080)throw Error('Local video conversion is limited to about 1080p to reduce device load. Choose a smaller maximum side.');
-  const estimated=(Number(o.bitrate)+(o.audio?Number(o.audioBitrate):0))*1000/8*video.duration;if(estimated>MAX_UPLOAD*.98)throw Error('Estimated video size exceeds 90 MiB. Choose a lower bitrate.');
+  const g=geometry(video.videoWidth,video.videoHeight,o,true);if(g.outWidth*g.outHeight>1920*1080)throw Error('Local video conversion is limited to about 1080p to reduce device load. Choose smaller output width and height.');
+  const budget=videoBudget(file.size,video.duration,o);if(budget.estimatedBytes>MAX_UPLOAD*.98)throw Error('Estimated video size exceeds 90 MiB. Choose auto bitrate or a lower manual bitrate.');
   stage='Canvas capture setup';
   canvas=document.createElement('canvas');canvas.width=g.outWidth;canvas.height=g.outHeight;const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('Could not allocate a video canvas.');
   const draw=()=>ctx.drawImage(video,g.x,g.y,g.w,g.h,0,0,g.outWidth,g.outHeight);draw();stream=canvas.captureStream(Number(o.fps));
   stage='Audio setup';
   if(o.audio){if(!audioContext||audioContext.state!=='running')throw Error('Audio encoding is unavailable. Enable audio playback permissions or uncheck Keep audio.');source=audioContext.createMediaElementSource(video);destination=audioContext.createMediaStreamDestination();source.connect(destination);for(const track of destination.stream.getAudioTracks())stream.addTrack(track);}
   stage='MediaRecorder initialization';
-  recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:Number(o.bitrate)*1000,...(o.audio?{audioBitsPerSecond:Number(o.audioBitrate)*1000}:{})});
+  recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:budget.videoKbps*1000,...(o.audio?{audioBitsPerSecond:budget.audioKbps*1000}:{})});
   const chunks=[];let bytes=0,problem=null,lastDraw=-Infinity,lastTime=-1,lastAdvance=performance.now();
   stage='Video encoding';
   const blob=await new Promise((resolve,reject)=>{
@@ -68,7 +68,7 @@ async function transcodeVideo(file,o,signal,progress,audioContext,host){
    const finish=err=>{if(finished)return;finished=true;cleanupRecording();if(err)reject(err);else if(!chunks.length)reject(Error('No video data was encoded.'));else resolve(new Blob(chunks,{type:mimeBase(recorder.mimeType||mime)}));};
    const onAbort=()=>stop(abortError()),onHidden=()=>{if(document.hidden)stop(Error('Conversion stopped because the tab was hidden. Keep the tab visible and retry.'));},onEnd=()=>{try{draw();}catch{}stop();},onError=()=>stop(videoDecodeError(video));
    cleanupRecording=()=>{signal.removeEventListener('abort',onAbort);document.removeEventListener('visibilitychange',onHidden);video.removeEventListener('ended',onEnd);video.removeEventListener('error',onError);clearInterval(interval);if(frameId!==undefined){if(videoFrame)video.cancelVideoFrameCallback(frameId);else cancelAnimationFrame(frameId);}};
-   recorder.ondataavailable=e=>{if(e.data.size){bytes+=e.data.size;if(bytes>MAX_UPLOAD){stop(Error('Encoded video exceeds 90 MiB. Use a lower bitrate.'));return;}chunks.push(e.data);}};
+   recorder.ondataavailable=e=>{if(e.data.size){bytes+=e.data.size;if(bytes>MAX_UPLOAD){stop(Error('Encoded video exceeds 90 MiB. Use a lower bitrate.'));return;}if(o.autoBitrate&&bytes>=file.size){stop(Error('Automatic encoding reached the original file size. Conversion stopped; choose Keep original, smaller dimensions, or a manual bitrate.'));return;}chunks.push(e.data);}};
    recorder.onerror=e=>stop(e.error||Error('MediaRecorder reported an encoder error without details.'));recorder.onstop=()=>finish(problem);
    signal.addEventListener('abort',onAbort,{once:true});document.addEventListener('visibilitychange',onHidden);video.addEventListener('ended',onEnd,{once:true});video.addEventListener('error',onError,{once:true});
    videoFrame=typeof video.requestVideoFrameCallback==='function';
@@ -77,7 +77,7 @@ async function transcodeVideo(file,o,signal,progress,audioContext,host){
    try{ensureActive(signal);recorder.start(1000);next();interval=setInterval(()=>{if(video.currentTime>lastTime){lastTime=video.currentTime;lastAdvance=performance.now();}else if(performance.now()-lastAdvance>20000){stop(Error('Video playback stalled. Try a lower resolution or another source.'));return;}progress(Math.min(.99,video.currentTime/video.duration));},250);video.play().catch(e=>stop(Error('Could not start video playback: '+e.message)));}catch(e){stop(e);}
   });
   stage='Encoded output validation';
-  ensureActive(signal);if(blob.type!==mimeBase(mime))throw Error(`Unexpected encoded video type: ${blob.type}; expected ${mimeBase(mime)}`);progress(1);return new File([blob],outputName(file.name,format.ext),{type:blob.type});
+  ensureActive(signal);if(blob.type!==mimeBase(mime))throw Error(`Unexpected encoded video type: ${blob.type}; expected ${mimeBase(mime)}`);if(o.autoBitrate&&blob.size>=file.size)throw Error(`Automatic encoding produced ${pretty(blob.size)} from ${pretty(file.size)}. Nothing uploaded. Keep original for an already compressed source, or try smaller dimensions / a manual bitrate.`);progress(1);return new File([blob],outputName(file.name,format.ext),{type:blob.type});
  }catch(error){if(signal.aborted)throw abortError();throw Error(`${stage}: ${failureMessage(error)}`,{cause:error});}
  finally{cleanupRecording();if(recorder&&recorder.state!=='inactive')try{recorder.stop();}catch{};video?.pause();stream?.getTracks().forEach(t=>t.stop());try{source?.disconnect();destination?.disconnect();}catch{}if(video){video.removeAttribute('src');video.load();video.remove();}if(url)URL.revokeObjectURL(url);if(canvas){canvas.width=1;canvas.height=1;}}
 }
@@ -109,7 +109,7 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
  function rowName(row){return namedOutput(row.base,prefix.value.trimStart(),outputExtension(row.file,row.o));}
  function displayName(row){try{return rowName(row);}catch{return 'Invalid name';}}
  function syncCrop(){visual?.refresh();}
- function showPreview(){const row=rows[selected];clearPreview();if(row.kind==='other')return;if(row.file.size>MAX_UPLOAD){preview.textContent='Preview disabled for sources larger than 90 MiB.';return;}
+ function showPreview(){const row=rows[selected];clearPreview();if(row.kind==='other')return;if(row.kind==='image'&&row.file.size>MAX_UPLOAD){preview.textContent='Image preview disabled for sources larger than 90 MiB.';return;}
   visual=mountVisualEditor(preview,row.file,row.kind,()=>row.o,patch=>{Object.assign(row.o,patch);for(const input of editor.querySelectorAll('[data-setting]'))if(Object.hasOwn(patch,input.dataset.setting))input.value=String(patch[input.dataset.setting]);});
  }
  function renderList(){list.replaceChildren(...rows.map((r,i)=>el('button',{type:'button',className:'media-studio-row'+(selected===i?' active':''),disabled:running,onclick:()=>{selected=i;renderList();renderEditor();showPreview();}},[el('strong',{text:displayName(r)}),el('small',{text:`${pretty(r.file.size)} · ${r.status}`})])));}
@@ -121,12 +121,12 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
   const choices=[['original','Keep original (no conversion)'],...(row.kind==='image'?formats.images.map(t=>[t,t.split('/')[1].toUpperCase()]):formats.videos.map(v=>[v.mime,v.label,!(o.audio?MediaRecorder.isTypeSupported(v.mime):MediaRecorder.isTypeSupported(v.silent))]))];
   editor.append(select('Output format / codec','format',choices,row,()=>{renderList();renderEditor();}));
   if(o.format!=='original'){
-   if(row.kind==='image'){if(o.format!=='image/png')editor.append(number('Quality (%)','quality',row,1,100));editor.append(number('Maximum side (px; 0 = original)','maxSide',row,0,8192));}
-   else {editor.append(number('Maximum side (px)','maxSide',row,2,1920),select('Frames per second','fps',[[15,'15'],[24,'24 · recommended'],[30,'30'],[60,'60 · heavier']],row),number('Video bitrate (kbps)','bitrate',row,100,30000,100),check('Keep audio','audio',row,renderEditor));if(o.audio)editor.append(select('Audio bitrate (kbps)','audioBitrate',[[64,'64'],[96,'96'],[128,'128'],[192,'192']],row));}
-   editor.append(el('p',{className:'small',text:'Crop: percent to remove from each edge; scaling preserves aspect ratio and never enlarges.'}),el('div',{className:'media-studio-crop-fields'},[['Left','left'],['Top','top'],['Right','right'],['Bottom','bottom']].map(([label,key])=>number(label+' %',key,row,0,99.9,.1))));
+   if(row.kind==='image'){if(o.format!=='image/png')editor.append(number('Quality (%)','quality',row,1,100));}
+   else {editor.append(select('Frames per second','fps',[[15,'15'],[24,'24 · recommended'],[30,'30'],[60,'60 · heavier']],row),check('Auto bitrate (aim smaller than source)','autoBitrate',row,renderEditor),check('Keep audio','audio',row,renderEditor));if(!o.autoBitrate)editor.append(number('Video bitrate (kbps)','bitrate',row,100,30000,100));if(o.audio)editor.append(select(o.autoBitrate?'Audio bitrate ceiling (kbps)':'Audio bitrate (kbps)','audioBitrate',[[64,'64'],[96,'96'],[128,'128'],[192,'192']],row));}
+   editor.append(el('p',{className:'small',text:'Crop: drag the source edges or use percentages. Set output width and height independently in the live preview below. Safety limits prevent oversized output.'}),el('div',{className:'media-studio-crop-fields'},[['Left','left'],['Top','top'],['Right','right'],['Bottom','bottom']].map(([label,key])=>number(label+' %',key,row,0,99.9,.1))));
   }
   editor.append(el('div',{className:'media-studio-actions'},[el('button',{type:'button',className:'btn sm',text:`Apply settings to all ${row.kind==='image'?'images':'videos'}`,onclick:()=>{try{validateOptions(o,row.kind);for(const r of rows)if(r.kind===row.kind)r.o={...o};notice.textContent='Settings applied to every '+row.kind+' in the batch.';renderList();renderEditor();}catch(e){notice.textContent=e.message;}}})]));
-  if(row.kind==='image')editor.append(el('p',{className:'sub small',text:'Image conversion produces a still image. Keep animated GIF/WebP originals to preserve animation.'}));else editor.append(el('p',{className:'sub small',text:'Video conversion runs in real time. Keep this tab visible. Codec availability, exact bitrate, duration metadata and seeking depend on the browser.'}));
+  if(row.kind==='image')editor.append(el('p',{className:'sub small',text:'Image conversion produces a still image. Keep animated GIF/WebP originals to preserve animation.'}));else editor.append(el('p',{className:'sub small',text:'Video conversion runs in real time. Keep this tab visible. Automatic bitrate aims for smaller output; the browser may exceed its target. If automatic encoding grows the file, upload is stopped rather than silently inflating it.'}));
  }
  renderList();renderEditor();showPreview();
  return await new Promise(resolve=>{

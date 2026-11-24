@@ -21,3 +21,14 @@
 .media-final-name{overflow-wrap:anywhere}
 
 .media-studio-errors{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;max-height:30vh;overflow:auto;padding:12px 14px;margin:10px 0;border:1px solid #b91c1c;border-radius:8px;color:#b91c1c;background:#fff1f2;font-size:13px;line-height:1.5;scroll-margin:12px}
+
+/* Independent X/Y scaling: separate edge handles, pixel fields and sliders. */
+.media-axis-controls{display:grid;gap:8px;width:100%}
+.media-axis-controls .media-v2-scale-range{display:grid;grid-template-columns:100px 82px minmax(0,1fr);gap:8px}
+.media-axis-controls input[type=number]{width:100%;min-width:0;padding:6px;border:1px solid var(--border,#dbe3ee);border-radius:6px;background:var(--bg,#f7f9fd);color:var(--text,#17233b)}
+.media-axis-controls>button{justify-self:start}
+.media-v2-scale-handle[data-axis=e]{right:0;top:50%;bottom:auto;transform:translate(50%,-50%);cursor:ew-resize}
+.media-v2-scale-handle[data-axis=s]{left:50%;right:auto;bottom:0;transform:translate(-50%,50%);cursor:ns-resize}
+.media-v2-scale-handle[data-axis=se]{right:0;bottom:0;cursor:nwse-resize}
+.media-source-details,.media-budget-details{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:420px){.media-axis-controls .media-v2-scale-range{grid-template-columns:85px 66px minmax(0,1fr)}}

@@ -20,7 +20,7 @@ test('defaults preserve animated GIF and use lightweight image/video settings',(
  const caps={images:['image/webp','image/jpeg'],videos:VIDEO_FORMATS};
  assert.equal(defaults({name:'photo.png',type:'image/png'},caps).format,'image/webp');
  assert.equal(defaults({name:'anim.gif',type:'image/gif'},caps).format,'original');
- const video=defaults({name:'clip.mov',type:'video/quicktime'},caps);assert.equal(video.maxSide,1280);assert.equal(video.fps,24);assert.equal(video.format,VIDEO_FORMATS[0].mime);
+ const video=defaults({name:'clip.mov',type:'video/quicktime'},caps);assert.equal(video.scaleX,null);assert.equal(video.scaleY,null);assert.equal(video.autoBitrate,true);assert.equal(video.fps,24);assert.equal(video.format,VIDEO_FORMATS[0].mime);
  assert.equal(defaults({name:'clip.mov',type:'video/quicktime'},{images:[],videos:[]}).format,'original');
 });
 test('file detection and validated encoding controls',()=>{
