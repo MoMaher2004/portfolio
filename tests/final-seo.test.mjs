@@ -78,9 +78,22 @@ test('Sitemap includes real lastmod values and only translations that exist',asy
  assert.doesNotMatch(xml,/\?lang=es/);
 });
 
-test('CMS uses ALT editor, lazy gallery and optimized large upload behavior',()=>{
+test('CMS uses ALT editor, lazy gallery and browser-based media conversion',()=>{
  const js=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
- for(const token of ['edit-media-alt','media-alt-form','portrait-alt-form','optimizeUploadImage','Related projects'])assert.ok(js.includes(token),token);
+ for(const token of ['edit-media-alt','media-alt-form','portrait-alt-form','Related projects'])assert.ok(js.includes(token),token);
+ const studio=readFileSync(new URL('../public/media-studio.js',import.meta.url),'utf8');
+ const worker=readFileSync(new URL('../public/media-image-worker.js',import.meta.url),'utf8');
+ const transform=readFileSync(new URL('../public/media-transform.js',import.meta.url),'utf8');
+ // The optional editor replaces the former automatic image compressor.
+ assert.match(js,/await import\(['"]\/media-studio\.js['"]\)/);
+ assert.match(js,/openMediaStudio\(files,/);
+ assert.match(js,/await uploadPreparedMedia\(file\)/);
+ assert.match(js,/api\('\/api\/admin\/files\?name='/);
+ assert.match(studio,/new Worker\(new URL\('\.\/media-image-worker\.js',import\.meta\.url\)/);
+ assert.match(worker,/new OffscreenCanvas\(/);
+ assert.match(worker,/canvas\.convertToBlob\(/);
+ assert.match(studio,/for\(let i=0;i<rows\.length&&!cancelled;i\+\+\)/);
+ assert.match(transform,/MAX_UPLOAD = 90 \* 1024 \* 1024/);
  const css=readFileSync(new URL('../public/app.css',import.meta.url),'utf8');assert.ok(css.includes(':root.light .about-signature'));
  const sql=readFileSync(new URL('../src/data.js',import.meta.url),'utf8');assert.ok(sql.includes('content_items.content<>excluded.content'));
 });
