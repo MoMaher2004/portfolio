@@ -73,19 +73,19 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
  let dialog,visual,audioContext,controller;const previousFocus=document.activeElement;
  try{
  if(!document.querySelector('link[data-media-studio-css]')){const style=el('link',{rel:'stylesheet',href:new URL('./media-studio.css',import.meta.url).href});style.dataset.mediaStudioCss='';document.head.append(style);}
- const formats=await capabilities(allowedImageTypes);const rows=files.map(file=>({file,kind:mediaKind(file),o:defaults(file,formats),base:filenameParts(file.name).base,prefix:'',status:'Ready'}));
+ const formats=await capabilities(allowedImageTypes);const rows=files.map(file=>({file,kind:mediaKind(file),o:defaults(file,formats),base:filenameParts(file.name).base,status:'Ready'}));
  let selected=0,running=false,cancelled=false,settled=false,phase='idle';const result={uploaded:[],failures:[],cancelled:false};
  dialog=el('dialog',{className:'media-studio',ariaLabel:'Media conversion and upload'});
  const title=el('h2',{text:'Prepare media for upload'}),intro=el('p',{className:'sub small',text:'Convert locally, one file at a time. Images: WebP by default (GIF stays original). Video: MP4 when supported, otherwise WebM. No conversion runs on Cloudflare.'});
  const list=el('div',{className:'media-studio-list'}),editor=el('div',{className:'media-studio-editor'}),notice=el('p',{className:'media-studio-notice',text:'Choose an item to edit its settings, or apply settings to all items of the same type.'}),progress=el('progress',{max:1,value:0,className:'media-studio-progress'}),progressText=el('p',{className:'small',ariaLive:'polite',text:'Ready'});
  const start=el('button',{type:'button',className:'btn primary',text:'Convert & upload'}),cancel=el('button',{type:'button',className:'btn',text:'Cancel'});
  const preview=el('div',{className:'media-studio-preview'});
- const prefix=el('input',{type:'text',maxLength:160,placeholder:'Prefix for all files (e.g. hospital-)',ariaLabel:'Bulk filename prefix'});
- const prefixApply=el('button',{type:'button',className:'btn sm',text:'Apply prefix to all',onclick:()=>{for(const row of rows)row.prefix=prefix.value;renderList();renderEditor();}});
- const naming=el('div',{className:'media-studio-naming'},[prefix,prefixApply]);
+ const prefix=el('input',{type:'text',maxLength:160,placeholder:'e.g. hospital-',ariaLabel:'Filename prefix for all files'});
+ const naming=el('div',{className:'media-studio-naming'},[el('label',{text:'Prefix (all files)'},[prefix]),el('small',{className:'sub',text:'Applied automatically as you type, including single-file uploads.'})]);
+ prefix.addEventListener('input',()=>{renderList();const finalName=editor.querySelector('.media-final-name');if(finalName)finalName.textContent=displayName(rows[selected]);});
  dialog.append(title,intro,naming,el('div',{className:'media-studio-layout'},[list,el('div',{},[editor,preview])]),notice,progress,progressText,el('div',{className:'media-studio-actions'},[cancel,start]));document.body.append(dialog);dialog.showModal();
  const clearPreview=()=>{visual?.dispose();visual=null;preview.replaceChildren();};
- function rowName(row){return namedOutput(row.base,row.prefix,outputExtension(row.file,row.o));}
+ function rowName(row){return namedOutput(row.base,prefix.value.trimStart(),outputExtension(row.file,row.o));}
  function displayName(row){try{return rowName(row);}catch{return 'Invalid name';}}
  function syncCrop(){visual?.refresh();}
  function showPreview(){const row=rows[selected];clearPreview();if(row.kind==='other')return;if(row.file.size>MAX_UPLOAD){preview.textContent='Preview disabled for sources larger than 90 MiB.';return;}
@@ -96,7 +96,7 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
  function select(label,key,choices,row,onChange){const select=el('select');for(const [value,text,disabled] of choices)select.append(el('option',{value:String(value),text,disabled:!!disabled}));select.value=String(row.o[key]);select.addEventListener('change',()=>{row.o[key]=key==='format'?select.value:Number(select.value);onChange?.();syncCrop();});return field(label,select);}
  function number(label,key,row,min,max,step=1){const input=el('input',{type:'number',min:String(min),max:String(max),step:String(step),value:String(row.o[key])});input.dataset.setting=key;input.addEventListener('input',()=>{row.o[key]=input.value===''?NaN:Number(input.value);syncCrop();});return field(label,input);}
  function check(label,key,row,onChange){const input=el('input',{type:'checkbox',checked:!!row.o[key]});input.addEventListener('change',()=>{row.o[key]=input.checked;onChange?.();});return el('label',{className:'media-studio-check'},[input,el('span',{text:label})]);}
- function renderEditor(){const row=rows[selected],o=row.o;editor.replaceChildren(el('h3',{text:row.file.name}));const name=el('input',{type:'text',maxLength:180,value:row.base,ariaLabel:'Individual filename without extension'});const finalName=el('p',{className:'small',text:displayName(row)});name.addEventListener('input',()=>{row.base=name.value;finalName.textContent=displayName(row);renderList();});editor.append(field('File name (without extension)',name),finalName);syncCrop();if(row.kind==='other'){editor.append(el('p',{className:'sub small',text:'This file is uploaded unchanged. Conversion is available for images and videos only.'}));return;}
+ function renderEditor(){const row=rows[selected],o=row.o;editor.replaceChildren(el('h3',{text:row.file.name}));const name=el('input',{type:'text',maxLength:180,value:row.base,ariaLabel:'Individual filename without extension'});const finalName=el('p',{className:'small media-final-name',text:displayName(row)});name.addEventListener('input',()=>{row.base=name.value;finalName.textContent=displayName(row);renderList();});editor.append(field('File name (without extension)',name),finalName);syncCrop();if(row.kind==='other'){editor.append(el('p',{className:'sub small',text:'This file is uploaded unchanged. Conversion is available for images and videos only.'}));return;}
   const choices=[['original','Keep original (no conversion)'],...(row.kind==='image'?formats.images.map(t=>[t,t.split('/')[1].toUpperCase()]):formats.videos.map(v=>[v.mime,v.label,!(o.audio?MediaRecorder.isTypeSupported(v.mime):MediaRecorder.isTypeSupported(v.silent))]))];
   editor.append(select('Output format / codec','format',choices,row,()=>{renderList();renderEditor();}));
   if(o.format!=='original'){
@@ -114,7 +114,8 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
   cancel.addEventListener('click',()=>{if(!running&&result.uploaded.length+result.failures.length)finish();else requestCancel();});dialog.addEventListener('cancel',e=>{e.preventDefault();if(!running&&result.uploaded.length+result.failures.length)finish();else requestCancel();});dialog.addEventListener('keydown',e=>e.stopPropagation());
   start.addEventListener('click',async()=>{
    if(running||settled)return;
-   try{for(const row of rows){validateOptions(row.o,row.kind);rowName(row);}}catch(e){notice.textContent=e.message;return;}
+   let uploadNames;
+   try{uploadNames=rows.map(row=>{validateOptions(row.o,row.kind);return rowName(row);});}catch(e){notice.textContent=e.message;return;}
    running=true;start.disabled=true;cancel.textContent='Cancel batch';editor.inert=true;naming.inert=true;clearPreview();renderList();
    if(rows.some(r=>r.kind==='video'&&r.o.format!=='original'&&r.o.audio)){try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){audioContext=new AC();await Promise.race([audioContext.resume(),new Promise(resolve=>setTimeout(resolve,3000))]);}}catch{}}
    for(let i=0;i<rows.length&&!cancelled;i++){
@@ -122,7 +123,7 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
     try{
      await tick();const prepared=await convert(row.file,row.o,row.kind,controller.signal,p=>{progress.value=(i+p*.8)/rows.length;progressText.textContent=`${i+1}/${rows.length} · ${row.file.name} · ${Math.round(p*100)}% encoding`;},audioContext,dialog,allowedImageTypes);
      if(cancelled)break;phase='uploading';row.status='Uploading';renderList();progressText.textContent=`${i+1}/${rows.length} · uploading ${pretty(prepared.size)}`;
-     const renamed=new File([prepared],rowName(row),{type:prepared.type,lastModified:prepared.lastModified});
+     const renamed=new File([prepared],uploadNames[i],{type:prepared.type,lastModified:prepared.lastModified});
      const uploaded=await upload(renamed);result.uploaded.push(uploaded);row.status=`Uploaded · ${pretty(prepared.size)}`;
     }catch(e){if(cancelled||e.name==='AbortError'){row.status='Cancelled';break;}row.status='Failed: '+e.message;result.failures.push({name:row.file.name,message:e.message});}
     progress.value=(i+1)/rows.length;renderList();await tick();

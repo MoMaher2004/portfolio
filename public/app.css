@@ -420,3 +420,16 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Tahoma,s
 .draft-preview-bar span{font-size:12px;color:#d0deef}
 .draft-preview-bar button{white-space:nowrap}
 @media(max-width:590px){.draft-preview-bar{flex-wrap:wrap;padding:12px 16px}.draft-preview-bar button{width:100%}}
+
+/* Compact actions for media library cards. */
+.media-card-info{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
+.media-card-name{flex:1;min-width:0;overflow-wrap:anywhere}
+.media-actions{position:relative;flex:none}
+.media-actions>summary{display:grid;place-items:center;list-style:none;cursor:pointer;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:22px;font-weight:700;line-height:1}
+.media-actions>summary::-webkit-details-marker{display:none}
+.media-actions>summary:hover,.media-actions>summary:focus-visible{border-color:var(--accent);color:var(--accent)}
+.media-item:has(.media-actions[open]){overflow:visible;position:relative;z-index:10}
+.media-actions-panel{position:absolute;inset-inline-end:0;top:calc(100% + 5px);z-index:11;width:155px;padding:5px;border:1px solid var(--border);border-radius:10px;background:var(--panel);box-shadow:0 10px 30px #14233c26}
+.media-actions-panel button{display:block;width:100%;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);text-align:start;font:inherit;cursor:pointer;white-space:nowrap}
+.media-actions-panel button:hover,.media-actions-panel button:focus-visible{background:var(--bg2);color:var(--accent)}
+.media-actions-panel button.danger{color:var(--danger)}

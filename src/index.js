@@ -145,7 +145,7 @@ async function main(req,env,ctx){
    if(path==='/api/admin/portrait'&&req.method==='PUT'){
      const type=(req.headers.get('Content-Type')||'').split(';')[0].trim().toLowerCase();
      if(!type.startsWith('image/')||!mediaMime(type))return error('Unsupported portrait image type',415);
-     const uploaded=await upload(req,env,'portrait');
+     const uploaded=await upload(req,env,url.searchParams.get('name')||'portrait');
      if(uploaded.status!==201)return uploaded;
      const item=await uploaded.json();
      try{
