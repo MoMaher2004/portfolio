@@ -412,3 +412,11 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Tahoma,s
 @media(max-width:930px){.certificates-section .cert-carousel-track>.cert-card{flex-basis:calc((100% - 18px)/2);max-width:calc((100% - 18px)/2)}}
 @media(max-width:590px){.certificates-section .cert-carousel-track>.cert-card{flex-basis:min(82vw,330px);max-width:min(82vw,330px)}.certificate-viewer-bar strong{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.cert-preview-button .cert-image img{transition:none}}
+
+/* Authenticated draft project preview: rendered inside /admin only. */
+.draft-preview-bar{position:sticky;top:0;z-index:220;display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px max(24px,calc((100vw - 1180px)/2));background:#132338;color:#fff;box-shadow:0 6px 24px #0002}
+.draft-preview-bar>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.draft-preview-bar strong{font-size:13px;letter-spacing:.3px}
+.draft-preview-bar span{font-size:12px;color:#d0deef}
+.draft-preview-bar button{white-space:nowrap}
+@media(max-width:590px){.draft-preview-bar{flex-wrap:wrap;padding:12px 16px}.draft-preview-bar button{width:100%}}
