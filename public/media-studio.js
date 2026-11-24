@@ -5,6 +5,17 @@ const ensureActive=signal=>{if(signal.aborted)throw abortError();};
 const pretty=n=>`${(n/1048576).toFixed(n<1048576?2:1)} MiB`;
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 let studioOpen=false;
+export function failureMessage(error){
+ const name=typeof error?.name==='string'?error.name:'';
+ const message=typeof error?.message==='string'?error.message.trim():typeof error==='string'?error.trim():'';
+ const status=Number.isInteger(error?.status)?`HTTP ${error.status}: `:'';
+ return status+(name&&name!=='Error'&&name!==message?`${name}: `:'')+(message||'No error details returned by the browser or server.');
+}
+function videoDecodeError(video){
+ const code=video.error?.code;
+ const reason={1:'Playback aborted',2:'Media read/network error',3:'Source decoding failed',4:'Source format or codec not supported'}[code]||'Could not decode source video';
+ return Error(`${reason}${code?` (media error ${code})`:''}${video.error?.message?`: ${video.error.message}`:''}`);
+}
 function el(tag,props={},children=[]){const node=document.createElement(tag);for(const [k,v] of Object.entries(props)){if(k==='className')node.className=v;else if(k==='text')node.textContent=v;else if(k==='style')Object.assign(node.style,v);else if(k.startsWith('on'))node.addEventListener(k.slice(2),v);else if(k in node)node[k]=v;else node.setAttribute(k,v);}for(const child of children)node.append(child);return node;}
 function canvasBlob(canvas,type,quality){return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Image encoding failed')),type,quality));}
 async function capabilities(allowed){
@@ -24,9 +35,9 @@ async function mainThreadImage(file,o,signal){
  let bitmap,canvas;try{ensureActive(signal);bitmap=await createImageBitmap(file);ensureActive(signal);if(bitmap.width*bitmap.height>MAX_IMAGE_PIXELS)throw Error('Source exceeds the 24 MP safe decoding limit.');const g=geometry(bitmap.width,bitmap.height,o);canvas=document.createElement('canvas');canvas.width=g.outWidth;canvas.height=g.outHeight;const ctx=canvas.getContext('2d',{alpha:o.format!=='image/jpeg'});if(o.format==='image/jpeg'){ctx.fillStyle='#fff';ctx.fillRect(0,0,g.outWidth,g.outHeight);}await tick();ensureActive(signal);ctx.drawImage(bitmap,g.x,g.y,g.w,g.h,0,0,g.outWidth,g.outHeight);bitmap.close();bitmap=null;const blob=await canvasBlob(canvas,o.format,o.quality/100);ensureActive(signal);if(blob.type!==o.format)throw Error('Your browser cannot encode the requested format.');return {blob};}finally{bitmap?.close();if(canvas){canvas.width=1;canvas.height=1;}}
 }
 function waitMedia(video,signal){return new Promise((resolve,reject)=>{
- if(signal.aborted){reject(abortError());return;}if(video.readyState>=2){resolve();return;}
+ if(signal.aborted){reject(abortError());return;}if(video.error){reject(videoDecodeError(video));return;}if(video.readyState>=2){resolve();return;}
  const finish=err=>{clearTimeout(timer);video.removeEventListener('loadeddata',ready);video.removeEventListener('error',failed);signal.removeEventListener('abort',cancel);err?reject(err):resolve();};
- const ready=()=>finish(),failed=()=>finish(Error('This browser cannot decode the selected video.')),cancel=()=>finish(abortError()),timer=setTimeout(()=>finish(Error('Video loading timed out.')),20000);
+ const ready=()=>finish(),failed=()=>finish(videoDecodeError(video)),cancel=()=>finish(abortError()),timer=setTimeout(()=>finish(Error('Video loading timed out.')),20000);
  video.addEventListener('loadeddata',ready,{once:true});video.addEventListener('error',failed,{once:true});signal.addEventListener('abort',cancel,{once:true});
 });}
 async function transcodeVideo(file,o,signal,progress,audioContext,host){
@@ -34,33 +45,41 @@ async function transcodeVideo(file,o,signal,progress,audioContext,host){
  if(!mime||!MediaRecorder.isTypeSupported(mime))throw Error('The selected codec/audio combination is not supported by this browser.');
  if(document.hidden)throw Error('Keep this tab visible during video conversion.');
  let video,canvas,stream,source,destination,recorder,url,frameId,interval,videoFrame=false,cleanupRecording=()=>{};
+ let stage='Source decoding';
  try{
   url=URL.createObjectURL(file);video=el('video',{preload:'auto',playsInline:true,muted:!o.audio,className:'media-studio-encoder'});host.append(video);video.src=url;await waitMedia(video,signal);ensureActive(signal);
+  stage='Source validation and output dimensions';
   if(!Number.isFinite(video.duration)||video.duration<=0)throw Error('A finite, decodable video is required.');
   if(video.videoWidth*video.videoHeight>3840*2160)throw Error('Source video exceeds 4K. Use a smaller source to protect this device.');
   const g=geometry(video.videoWidth,video.videoHeight,o,true);if(g.outWidth*g.outHeight>1920*1080)throw Error('Local video conversion is limited to about 1080p to reduce device load. Choose a smaller maximum side.');
   const estimated=(Number(o.bitrate)+(o.audio?Number(o.audioBitrate):0))*1000/8*video.duration;if(estimated>MAX_UPLOAD*.98)throw Error('Estimated video size exceeds 90 MiB. Choose a lower bitrate.');
-  canvas=document.createElement('canvas');canvas.width=g.outWidth;canvas.height=g.outHeight;const ctx=canvas.getContext('2d',{alpha:false});
+  stage='Canvas capture setup';
+  canvas=document.createElement('canvas');canvas.width=g.outWidth;canvas.height=g.outHeight;const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('Could not allocate a video canvas.');
   const draw=()=>ctx.drawImage(video,g.x,g.y,g.w,g.h,0,0,g.outWidth,g.outHeight);draw();stream=canvas.captureStream(Number(o.fps));
+  stage='Audio setup';
   if(o.audio){if(!audioContext||audioContext.state!=='running')throw Error('Audio encoding is unavailable. Enable audio playback permissions or uncheck Keep audio.');source=audioContext.createMediaElementSource(video);destination=audioContext.createMediaStreamDestination();source.connect(destination);for(const track of destination.stream.getAudioTracks())stream.addTrack(track);}
+  stage='MediaRecorder initialization';
   recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:Number(o.bitrate)*1000,...(o.audio?{audioBitsPerSecond:Number(o.audioBitrate)*1000}:{})});
   const chunks=[];let bytes=0,problem=null,lastDraw=-Infinity,lastTime=-1,lastAdvance=performance.now();
+  stage='Video encoding';
   const blob=await new Promise((resolve,reject)=>{
    let finished=false;
    const stop=(err)=>{if(err&&!problem)problem=err;video.pause();if(recorder.state!=='inactive'){try{recorder.stop();}catch(e){finish(problem||e);}}else finish(problem);};
    const finish=err=>{if(finished)return;finished=true;cleanupRecording();if(err)reject(err);else if(!chunks.length)reject(Error('No video data was encoded.'));else resolve(new Blob(chunks,{type:mimeBase(recorder.mimeType||mime)}));};
-   const onAbort=()=>stop(abortError()),onHidden=()=>{if(document.hidden)stop(Error('Conversion stopped because the tab was hidden. Keep the tab visible and retry.'));},onEnd=()=>{try{draw();}catch{}stop();},onError=()=>stop(Error('The source video could not be decoded.'));
+   const onAbort=()=>stop(abortError()),onHidden=()=>{if(document.hidden)stop(Error('Conversion stopped because the tab was hidden. Keep the tab visible and retry.'));},onEnd=()=>{try{draw();}catch{}stop();},onError=()=>stop(videoDecodeError(video));
    cleanupRecording=()=>{signal.removeEventListener('abort',onAbort);document.removeEventListener('visibilitychange',onHidden);video.removeEventListener('ended',onEnd);video.removeEventListener('error',onError);clearInterval(interval);if(frameId!==undefined){if(videoFrame)video.cancelVideoFrameCallback(frameId);else cancelAnimationFrame(frameId);}};
    recorder.ondataavailable=e=>{if(e.data.size){bytes+=e.data.size;if(bytes>MAX_UPLOAD){stop(Error('Encoded video exceeds 90 MiB. Use a lower bitrate.'));return;}chunks.push(e.data);}};
-   recorder.onerror=e=>stop(e.error||Error('Video encoder failed.'));recorder.onstop=()=>finish(problem);
+   recorder.onerror=e=>stop(e.error||Error('MediaRecorder reported an encoder error without details.'));recorder.onstop=()=>finish(problem);
    signal.addEventListener('abort',onAbort,{once:true});document.addEventListener('visibilitychange',onHidden);video.addEventListener('ended',onEnd,{once:true});video.addEventListener('error',onError,{once:true});
    videoFrame=typeof video.requestVideoFrameCallback==='function';
    const next=()=>{frameId=videoFrame?video.requestVideoFrameCallback(frame):requestAnimationFrame(frame);};
    function frame(now){if(finished||problem||recorder.state==='inactive')return;try{if(now-lastDraw>=1000/Number(o.fps)-2){draw();lastDraw=now;}next();}catch(e){stop(e);}}
    try{ensureActive(signal);recorder.start(1000);next();interval=setInterval(()=>{if(video.currentTime>lastTime){lastTime=video.currentTime;lastAdvance=performance.now();}else if(performance.now()-lastAdvance>20000){stop(Error('Video playback stalled. Try a lower resolution or another source.'));return;}progress(Math.min(.99,video.currentTime/video.duration));},250);video.play().catch(e=>stop(Error('Could not start video playback: '+e.message)));}catch(e){stop(e);}
   });
-  ensureActive(signal);if(blob.type!==mimeBase(mime))throw Error('Unexpected encoded video type.');progress(1);return new File([blob],outputName(file.name,format.ext),{type:blob.type});
- }finally{cleanupRecording();if(recorder&&recorder.state!=='inactive')try{recorder.stop();}catch{};video?.pause();stream?.getTracks().forEach(t=>t.stop());try{source?.disconnect();destination?.disconnect();}catch{}if(video){video.removeAttribute('src');video.load();video.remove();}if(url)URL.revokeObjectURL(url);if(canvas){canvas.width=1;canvas.height=1;}}
+  stage='Encoded output validation';
+  ensureActive(signal);if(blob.type!==mimeBase(mime))throw Error(`Unexpected encoded video type: ${blob.type}; expected ${mimeBase(mime)}`);progress(1);return new File([blob],outputName(file.name,format.ext),{type:blob.type});
+ }catch(error){if(signal.aborted)throw abortError();throw Error(`${stage}: ${failureMessage(error)}`,{cause:error});}
+ finally{cleanupRecording();if(recorder&&recorder.state!=='inactive')try{recorder.stop();}catch{};video?.pause();stream?.getTracks().forEach(t=>t.stop());try{source?.disconnect();destination?.disconnect();}catch{}if(video){video.removeAttribute('src');video.load();video.remove();}if(url)URL.revokeObjectURL(url);if(canvas){canvas.width=1;canvas.height=1;}}
 }
 async function convert(file,o,kind,signal,progress,audioContext,host,allowed){
  ensureActive(signal);validateOptions(o,kind);if(o.format==='original')return checkUpload(file,allowed);
@@ -80,10 +99,12 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
  const list=el('div',{className:'media-studio-list'}),editor=el('div',{className:'media-studio-editor'}),notice=el('p',{className:'media-studio-notice',text:'Choose an item to edit its settings, or apply settings to all items of the same type.'}),progress=el('progress',{max:1,value:0,className:'media-studio-progress'}),progressText=el('p',{className:'small',ariaLive:'polite',text:'Ready'});
  const start=el('button',{type:'button',className:'btn primary',text:'Convert & upload'}),cancel=el('button',{type:'button',className:'btn',text:'Cancel'});
  const preview=el('div',{className:'media-studio-preview'});
+ const errors=el('div',{className:'media-studio-errors',role:'alert',hidden:true,tabIndex:-1});
+ function showErrors(){errors.hidden=!result.failures.length;errors.textContent=result.failures.map(f=>`${f.name} — ${f.message}`).join('\n');}
  const prefix=el('input',{type:'text',maxLength:160,placeholder:'e.g. hospital-',ariaLabel:'Filename prefix for all files'});
  const naming=el('div',{className:'media-studio-naming'},[el('label',{text:'Prefix (all files)'},[prefix]),el('small',{className:'sub',text:'Applied automatically as you type, including single-file uploads.'})]);
  prefix.addEventListener('input',()=>{renderList();const finalName=editor.querySelector('.media-final-name');if(finalName)finalName.textContent=displayName(rows[selected]);});
- dialog.append(title,intro,naming,el('div',{className:'media-studio-layout'},[list,el('div',{},[editor,preview])]),notice,progress,progressText,el('div',{className:'media-studio-actions'},[cancel,start]));document.body.append(dialog);dialog.showModal();
+ dialog.append(title,intro,errors,naming,el('div',{className:'media-studio-layout'},[list,el('div',{},[editor,preview])]),notice,progress,progressText,el('div',{className:'media-studio-actions'},[cancel,start]));document.body.append(dialog);dialog.showModal();
  const clearPreview=()=>{visual?.dispose();visual=null;preview.replaceChildren();};
  function rowName(row){return namedOutput(row.base,prefix.value.trimStart(),outputExtension(row.file,row.o));}
  function displayName(row){try{return rowName(row);}catch{return 'Invalid name';}}
@@ -115,7 +136,7 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
   start.addEventListener('click',async()=>{
    if(running||settled)return;
    let uploadNames;
-   try{uploadNames=rows.map(row=>{validateOptions(row.o,row.kind);return rowName(row);});}catch(e){notice.textContent=e.message;return;}
+   try{uploadNames=rows.map(row=>{validateOptions(row.o,row.kind);return rowName(row);});}catch(e){notice.textContent=failureMessage(e);notice.scrollIntoView({block:'nearest'});console.error('[Media Studio] Invalid settings:',failureMessage(e));return;}
    running=true;start.disabled=true;cancel.textContent='Cancel batch';editor.inert=true;naming.inert=true;clearPreview();renderList();
    if(rows.some(r=>r.kind==='video'&&r.o.format!=='original'&&r.o.audio)){try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){audioContext=new AC();await Promise.race([audioContext.resume(),new Promise(resolve=>setTimeout(resolve,3000))]);}}catch{}}
    for(let i=0;i<rows.length&&!cancelled;i++){
@@ -125,11 +146,16 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
      if(cancelled)break;phase='uploading';row.status='Uploading';renderList();progressText.textContent=`${i+1}/${rows.length} · uploading ${pretty(prepared.size)}`;
      const renamed=new File([prepared],uploadNames[i],{type:prepared.type,lastModified:prepared.lastModified});
      const uploaded=await upload(renamed);result.uploaded.push(uploaded);row.status=`Uploaded · ${pretty(prepared.size)}`;
-    }catch(e){if(cancelled||e.name==='AbortError'){row.status='Cancelled';break;}row.status='Failed: '+e.message;result.failures.push({name:row.file.name,message:e.message});}
+    }catch(e){if(cancelled||controller.signal.aborted){row.status='Cancelled';break;}
+     const step=phase==='uploading'?'Upload / save':row.o.format==='original'?'Original file validation':'Conversion';
+     const message=`${step}: ${failureMessage(e)}`;
+     row.status='Failed: '+message;result.failures.push({name:uploadNames[i],message});showErrors();
+     console.error('[Media Studio] File failed',{name:uploadNames[i],sourceType:mediaType(row.file),sourceBytes:row.file.size,format:row.o.format,settings:{...row.o},message});
+    }
     progress.value=(i+1)/rows.length;renderList();await tick();
    }
    running=false;phase='done';renderList();editor.inert=true;start.hidden=true;cancel.disabled=false;cancel.textContent='Done';progressText.textContent=`${result.uploaded.length} uploaded · ${result.failures.length} failed${cancelled?' · stopped':''}`;notice.textContent=result.failures.length?result.failures.map(f=>`${f.name}: ${f.message}`).join(' | '):'Finished. Only converted outputs (or selected originals) were uploaded.';
-   if(audioContext){try{await audioContext.close();}catch{}audioContext=null;}if(rows.length===1&&!result.failures.length)finish();
+   if(audioContext){try{await audioContext.close();}catch{}audioContext=null;}if(rows.length===1&&!result.failures.length)finish();else if(result.failures.length){showErrors();errors.focus({preventScroll:true});errors.scrollIntoView({block:'start'});}
   });
  });
  }finally{if(audioContext)try{await audioContext.close();}catch{}visual?.dispose();dialog?.close();dialog?.remove();studioOpen=false;previousFocus?.focus?.();}

@@ -19,3 +19,5 @@
 .media-studio-naming label{display:flex;align-items:center;gap:8px;flex:1;min-width:0;font-weight:600}
 .media-studio-naming small{flex:1 0 100%}
 .media-final-name{overflow-wrap:anywhere}
+
+.media-studio-errors{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;max-height:30vh;overflow:auto;padding:12px 14px;margin:10px 0;border:1px solid #b91c1c;border-radius:8px;color:#b91c1c;background:#fff1f2;font-size:13px;line-height:1.5;scroll-margin:12px}
