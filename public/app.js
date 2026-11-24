@@ -420,7 +420,7 @@ case 'skills':return `${dh('Profile / Expertise','Skills Manager','Edit hard-ski
 case 'offers':return `${dh('Clients / Commercial','Offers','Flexible proposals with clear conditions.',`<button class="btn primary sm" data-action="new-offer">+ New offer</button>`)}<div class="offer-admin-grid">${db.offers.map(o=>`<div class="panel offer-admin"><div class="panel-header"><h3>${esc(o.title)}</h3>${badge(o.active?'Active':'Hidden',!o.active)}</div><p class="sub small">${esc(o.description)}</p><p class="muted micro">${esc(o.terms)}</p><div class="hero-ctas"><button class="btn sm" data-action="edit-offer" data-id="${esc(o.id)}">Edit</button><button class="btn sm" data-action="toggle-offer" data-id="${esc(o.id)}">${o.active?'Hide':'Publish'}</button><button class="btn sm danger" data-action="delete-offer" data-id="${esc(o.id)}">Delete</button></div></div>`).join('')}</div>`;
 case 'sections':return `${dh('Site / Layout','Sections & layout','Create custom content blocks, choose layout, reorder and publish.',`<button class="btn primary sm" data-action="new-custom-section">+ Custom section</button>`)}<div class="panel"><div class="panel-header"><h3>Homepage section order</h3>${badge('Drag-free ordering')}</div><div class="sortable-list">${db.sectionsOrder.map((k,i)=>`<div class="sortable-row"><div class="sort-grip">☷</div><div class="sort-name"><b>${esc(sectionName(k))}</b><span>${db.customSections.some(x=>x.id===k)?'Flexible section · '+esc(db.customSections.find(x=>x.id===k).layout):'Core section'} · ${i+1} / ${db.sectionsOrder.length}</span></div>${orderButtons('section',k,i,db.sectionsOrder.length)}${db.customSections.some(x=>x.id===k)?`<div class="table-actions"><button data-action="edit-custom-section" data-id="${esc(k)}">Edit</button><button data-action="delete-custom-section" data-id="${esc(k)}">Delete</button></div>`:''}<label class="toggle-switch"><input type="checkbox" data-section="${esc(k)}" ${db.sections[k]?'checked':''}><span>${db.sections[k]?'Visible':'Hidden'}</span></label></div>`).join('')}</div><p class="sub micro">Sections with sample content are clearly labeled. Edit or hide them before publishing.</p></div><div class="panel"><div class="panel-header"><h3>Flexible sections & content</h3><button class="btn sm primary" data-action="new-custom-section">+ Create</button></div><div class="custom-admin-grid">${db.customSections.map(x=>`<article class="custom-admin-card"><span class="eyebrow">${esc(x.layout.toUpperCase())} · ${x.items.length} items</span><h3>${esc(x.title)}</h3><p class="sub small">${esc(x.description||'')}</p><div class="table-actions"><button data-action="edit-custom-section" data-id="${esc(x.id)}">Edit section</button><button data-action="new-custom-item" data-id="${esc(x.id)}">+ Add item</button></div><div class="custom-item-list">${x.items.map((it,i)=>`<div class="custom-item-row"><b>${esc(it.title)}</b><div class="table-actions">${orderButtons('custom-item',x.id+'|'+it.id,i,x.items.length)}<button data-action="edit-custom-item" data-id="${esc(x.id+'|'+it.id)}">Edit</button><button data-action="delete-custom-item" data-id="${esc(x.id+'|'+it.id)}">✕</button></div></div>`).join('')}</div></article>`).join('')}</div></div>`;
 case 'certificates':return `${dh('Credentials / Training','Certificates','Add certificate cover images and adjust their order.',`<button class="btn primary sm" data-action="new-cert">+ New certificate</button>`)}<div class="panel"><div class="table-scroll"><table class="table"><thead><tr><th>Order</th><th>Preview</th><th>Certificate</th><th>Issuer</th><th>Year</th><th>Actions</th></tr></thead><tbody>${db.certificates.map((c,i)=>`<tr><td>${orderButtons('certificates',c.id,i,db.certificates.length)}</td><td><img class="admin-cert-preview" src="${esc(c.image||certificateMock(c,i))}" alt="Certificate"></td><td><b>${esc(c.title)}</b></td><td>${esc(c.issuer)}</td><td>${esc(c.year)}</td><td><div class="table-actions"><button data-action="edit-cert" data-id="${esc(c.id)}">Edit / Image</button><button data-action="delete-cert" data-id="${esc(c.id)}">Delete</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
-case 'media':return `${dh('Assets / Storage','Media Library','Upload files and assign them to projects in Edit Project.',`<button class="btn primary sm" data-action="upload">+ Upload</button>`)}<button type="button" class="upload-area" id="media-drop-zone" data-action="upload"><strong>Drop files here or click to browse</strong><span class="small">Images and videos: optional local conversion before upload. Output limit: 90 MiB per file. PDF, JSON and text are unchanged.</span></button><input id="media-input" type="file" accept="image/*,video/*,.pdf,.json,.txt,.mov,.mkv,.avi,.heic,.heif" multiple hidden><div class="field" style="margin:14px 0"><label for="media-library-search">Search media</label><input type="search" id="media-library-search" placeholder="Search filename or file type..." autocomplete="off"></div><p id="media-library-empty" class="field-help" hidden>No media matching your search.</p><div class="media-grid">${mediaNewestFirst().map(m=>`<div class="media-item"><div class="media-visual" data-action="preview-media" data-id="${esc(m.id)}" role="button" tabindex="0" aria-label="Preview ${esc(m.name)}">${m.type.startsWith('image/')?`<img src="${esc(m.src)}" alt="${esc(m.name)}">`:m.type.startsWith('video/')?`<video src="${esc(m.src)}" muted preload="metadata" playsinline></video><span class="media-play-icon">▶</span>`:m.type==='application/pdf'?'<span class="media-pdf-icon">PDF</span>':'▧'}</div><div class="info"><b>${esc(m.name)}</b><p class="muted micro">${esc(m.type)}</p><div class="table-actions"><button class="btn sm" data-action="preview-media" data-id="${esc(m.id)}">Preview ↗</button>${m.type.startsWith('image/')?`<button class="btn sm" data-action="edit-media-alt" data-id="${esc(m.id)}">ALT text</button>`:''}<button class="btn sm danger" data-action="delete-media" data-id="${esc(m.id)}">Delete</button></div></div></div>`).join('')}</div>`;
+case 'media':return `${dh('Assets / Storage','Media Library','Upload files and assign them to projects in Edit Project.',`<button class="btn primary sm" data-action="upload">+ Upload</button>`)}<button type="button" class="upload-area" id="media-drop-zone" data-action="upload"><strong>Drop files here or click to browse</strong><span class="small">Images and videos: optional local conversion before upload. Output limit: 90 MiB per file. PDF, JSON and text are unchanged.</span></button><input id="media-input" type="file" accept="image/*,video/*,.pdf,.json,.txt,.mov,.mkv,.avi,.heic,.heif" multiple hidden><div class="field" style="margin:14px 0"><label for="media-library-search">Search media</label><input type="search" id="media-library-search" placeholder="Search filename or file type..." value="${esc(mediaLibraryQuery)}" autocomplete="off"></div><div id="media-library-results">${mediaLibraryResults()}</div>`;
 case 'inbox':return inbox();
 case 'analytics':return analyticsDashboard();
 case 'settings':return `${dh('Workspace / Preferences','Settings','Brand identity, languages and preview controls.')}<div class="panel"><h3>Brand logo & tab icon</h3><p class="sub small">Upload your own logo and favicon (PNG, JPEG or WebP). If the favicon is missing, the logo is used as its fallback.</p><div class="brand-admin-grid"><div class="brand-upload"><div class="brand-preview">${db.brand.logo?`<img src="${esc(db.brand.logo)}" alt="">`:`${brandMark()}`}</div><b>Portfolio logo</b><input type="file" id="brand-logo-input" accept="image/png,image/jpeg,image/webp" hidden><div class="table-actions"><button class="btn sm primary" data-action="upload-brand-logo">Upload</button><button class="btn sm" data-action="clear-brand-logo">Remove</button></div></div><div class="brand-upload"><div class="brand-preview">${db.brand.favicon?`<img src="${esc(db.brand.favicon)}" alt="Favicon">`:db.brand.logo?`<img src="${esc(db.brand.logo)}" alt="Fallback favicon">`:'<span class="brand-mark">M.</span>'}</div><b>Browser tab icon</b><input type="file" id="brand-favicon-input" accept="image/png,image/jpeg,image/webp" hidden><div class="table-actions"><button class="btn sm primary" data-action="upload-brand-favicon">Upload</button><button class="btn sm" data-action="clear-brand-favicon">Remove</button></div></div></div></div><div class="panel"><h3>Professional identity & project filters</h3><p class="sub small">Choose how you describe yourself; categories are derived from published projects, so no empty categories appear. In Edit Project, add new tracks separated by commas.</p><form id="portfolio-preferences-form"><div class="field"><label>Main professional descriptor</label><input name="focus" value="${esc(db.settings.focus)}" placeholder="e.g. Software & Systems Engineer"></div><div class="field"><label>Default project filter</label><select name="defaultTrack">${['All',...new Set(db.projects.filter(p=>p.published).flatMap(p=>p.tracks||[]).map(x=>x.trim()).filter(Boolean))].map(x=>`<option value="${esc(x)}" ${(db.settings.defaultTrack||'All')===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div><div class="field"><label for="home-project-count">Projects shown on homepage</label><input id="home-project-count" name="homeProjectCount" type="number" min="5" step="1" required value="${homeProjectCount(db.settings.homeProjectCount)}"></div><button class="btn primary" type="submit">Save preferences ✓</button></form></div><div class="panel"><h3>Homepage SEO · Search appearance</h3><p class="sub small">Edit the search title and description used by your portfolio. Leave a field blank to use the existing page content.</p><form id="seo-home-form">
@@ -507,6 +507,56 @@ function refreshProjectMediaButtons(list){
   row.querySelector('[data-direction="down"]').disabled=index===rows.length-1;
  });
 }
+// Library pagination is local to the authenticated dashboard; only current-page
+// media cards are mounted, while search still covers the entire collection.
+const MEDIA_PAGE_SIZE=24;
+let mediaLibraryPage=1,mediaLibraryQuery='';
+function mediaPageSlice(items,query,page,size){
+ const q=String(query||'').normalize('NFKC').trim().toLocaleLowerCase();
+ const filtered=items.filter(m=>`${m.name||''} ${m.type||''}`.normalize('NFKC').toLocaleLowerCase().includes(q));
+ const count=filtered.length,pages=Math.max(1,Math.ceil(count/size)),current=Math.max(1,Math.min(pages,Math.floor(page)||1));
+ return {items:filtered.slice((current-1)*size,current*size),count,pages,page:current};
+}
+function mediaLibraryResults(){
+ const result=mediaPageSlice(mediaNewestFirst(),mediaLibraryQuery,mediaLibraryPage,MEDIA_PAGE_SIZE);mediaLibraryPage=result.page;
+ const first=result.count?(result.page-1)*MEDIA_PAGE_SIZE+1:0,last=Math.min(result.count,result.page*MEDIA_PAGE_SIZE);
+ const pager=`<nav aria-label="Media pagination" class="table-actions" style="justify-content:space-between;margin:14px 0"><span class="sub small">${first}–${last} of ${result.count} files · Page ${result.page} / ${result.pages}</span><div class="table-actions"><button class="btn sm" data-action="media-page" data-value="${result.page-1}" ${result.page===1?'disabled':''}>← Previous</button><button class="btn sm" data-action="media-page" data-value="${result.page+1}" ${result.page===result.pages?'disabled':''}>Next →</button></div></nav>`;
+ return `${pager}${result.count?`<div class="media-grid">${result.items.map(m=>`<div class="media-item"><div class="media-visual" data-action="preview-media" data-id="${esc(m.id)}" role="button" tabindex="0" aria-label="Preview ${esc(m.name)}">${m.type.startsWith('image/')?`<img loading="lazy" decoding="async" src="${esc(m.src)}" alt="${esc(m.name)}">`:m.type.startsWith('video/')?`<video src="${esc(m.src)}" muted preload="none" playsinline></video><span class="media-play-icon">▶</span>`:m.type==='application/pdf'?'<span class="media-pdf-icon">PDF</span>':'▧'}</div><div class="info"><b>${esc(m.name)}</b><p class="muted micro">${esc(m.type)}</p><div class="table-actions"><button class="btn sm" data-action="preview-media" data-id="${esc(m.id)}">Preview ↗</button>${m.type.startsWith('image/')?`<button class="btn sm" data-action="edit-media-alt" data-id="${esc(m.id)}">ALT text</button>`:''}<button class="btn sm" data-action="rename-media" data-id="${esc(m.id)}">Rename</button>${/^(image|video)\//.test(m.type)?`<button class="btn sm" data-action="reedit-media" data-id="${esc(m.id)}">Edit copy</button>`:''}<button class="btn sm danger" data-action="delete-media" data-id="${esc(m.id)}">Delete</button></div></div></div>`).join('')}</div>`:'<p id="media-library-empty" class="field-help">No media matching your search.</p>'}${result.count>MEDIA_PAGE_SIZE?pager:''}`;
+}
+function refreshMediaLibrary(){const target=$('#media-library-results');if(target)target.innerHTML=mediaLibraryResults();}
+async function renameMedia(id){
+ if(!ui.authenticated||!adminToken||libraryUploadInProgress)return;
+ const m=db.media.find(x=>x.id===id);if(!m)return;
+ const {filenameParts,namedOutput}=await import('/media-editor-controls.js');const {base,ext}=filenameParts(m.name);
+ const entered=prompt('New filename (extension is preserved)',base);if(entered===null)return;
+ const session=adminToken;libraryUploadInProgress=true;
+ try{const name=namedOutput(entered,'',ext);if(name===m.name)return;await lastSave;
+  if(adminToken!==session||!ui.authenticated)throw Error('Admin session ended');
+  const result=await api('/api/admin/files/'+encodeURIComponent(id),{method:'PATCH',body:{name}});
+  if(adminToken!==session)return;m.name=result.name;refreshMediaLibrary();toast('Media renamed');
+ }catch(e){toast('Rename failed: '+e.message)}finally{libraryUploadInProgress=false;}
+}
+async function reeditMedia(id){
+ if(!ui.authenticated||!adminToken||libraryUploadInProgress)return;
+ const m=db.media.find(x=>x.id===id);if(!m||!(/^(image|video)\//.test(m.type)))return;
+ // Fetch only existing same-origin R2 media; never follow arbitrary URLs.
+ if(!/^\/media\/[0-9a-f-]{36}$/i.test(m.src)){toast('This is not a local media file');return;}
+ if(Number(m.bytes)>90*1024*1024){toast('File exceeds the 90 MiB editor limit');return;}
+ libraryUploadInProgress=true;const session=adminToken;
+ try{toast('Loading media for editing…');const response=await fetch(m.src,{redirect:'error'});if(!response.ok)throw Error('Could not load source file');
+  if(Number(response.headers.get('Content-Length'))>90*1024*1024)throw Error('Source exceeds 90 MiB');
+  const blob=await response.blob();if(!blob.size||blob.size>90*1024*1024)throw Error('Invalid source size');
+  if(adminToken!==session||!ui.authenticated)throw Error('Admin session ended');
+  const file=new File([blob],m.name,{type:m.type});const {openMediaStudio}=await import('/media-studio.js');
+  const result=await openMediaStudio([file],async prepared=>{
+   if(adminToken!==session||!ui.authenticated)throw Error('Admin session ended');
+   const item=await uploadPreparedMedia(prepared);if(adminToken!==session)throw Error('Admin session ended');
+   for(const k of ['alt','altAr','altEs'])if(typeof m[k]==='string')item[k]=m[k];db.media.unshift(item);save();
+   if(!await lastSave)throw Error('File uploaded but media metadata could not be saved. Check the dashboard before retrying.');return item;
+  });
+  if(adminToken!==session)return;if(result.uploaded.length){mediaLibraryPage=1;mediaLibraryQuery='';render(true);toast('Edited copy uploaded — original and project references preserved');}
+ }catch(e){toast('Edit copy failed: '+e.message)}finally{libraryUploadInProgress=false;}
+}
 let libraryUploadInProgress=false;
 async function uploadToMediaLibrary(files){
  if(!files.length||!ui.authenticated)return;
@@ -525,7 +575,7 @@ async function uploadToMediaLibrary(files){
    return item;
   });
   if(adminToken!==session)return;
-  if(result.uploaded.length&&ui.tab==='media'&&!ui.modal)render(true);
+  if(result.uploaded.length&&ui.tab==='media'&&!ui.modal){mediaLibraryPage=1;mediaLibraryQuery='';render(true);}
   toast(`${result.uploaded.length} uploaded, ${result.failures.length} failed${result.cancelled?' — stopped':''}`);
  }catch(err){toast('Media editor: '+err.message)}
  finally{libraryUploadInProgress=false}
@@ -720,6 +770,9 @@ case 'edit-project':ui.modal='project';ui.modalId=id;ui.pendingProjectCoverId=nu
 case 'delete-project':ui.modal='delete-project';ui.modalId=id;render(true);break;
 case 'confirm-delete-project':db.projects=db.projects.filter(p=>p.id!==ui.modalId);ui.modal=null;save();render(true);toast('Project deleted');break;
 case 'toggle-project':{let p=getProject(id);if(p){p.published=!p.published;save();render(true)}break}
+case 'media-page':mediaLibraryPage=Number(value);refreshMediaLibrary();break;
+case 'rename-media':void renameMedia(id);break;
+case 'reedit-media':void reeditMedia(id);break;
 case 'edit-media-alt':ui.modal='media-alt';ui.modalId=id;render(true);break;
 case 'clear-cert-image':ui.pendingCertImage='';{const image=$('.cert-image-preview img');if(image){image.removeAttribute('src');image.style.display='none'}}toast('Image cleared — save the certificate to apply');break;
 case 'new-cert':ui.pendingCertImage=null;ui.modal='certificate';ui.modalId=null;render(true);break;
@@ -819,15 +872,7 @@ document.addEventListener('input',ev=>{
   select.value=chosen; // Never clear the selected cover just because of a search.
   return;
  }
- const items=[...document.querySelectorAll('.media-grid .media-item')];
- let visible=0;
- for(const item of items){
-  const text=item.querySelector('.info')?.textContent||'';
-  const match=text.normalize('NFKC').toLocaleLowerCase().includes(query);
-  item.style.display=match?'':'none';
-  if(match)visible++;
- }
- const empty=$('#media-library-empty');if(empty)empty.hidden=visible!==0;
+ mediaLibraryQuery=input.value;mediaLibraryPage=1;refreshMediaLibrary();
 });
 document.addEventListener('dragover',ev=>{
  const zone=$('#media-drop-zone');

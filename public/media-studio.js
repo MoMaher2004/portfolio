@@ -1,4 +1,5 @@
 import {MAX_UPLOAD,MAX_IMAGE_PIXELS,IMAGE_TYPES,VIDEO_FORMATS,mediaType,mediaKind,mimeBase,geometry,outputName,defaults,validateOptions,checkUpload} from './media-transform.js';
+import {filenameParts,namedOutput,outputExtension,mountVisualEditor} from './media-editor-controls.js';
 const abortError=()=>new DOMException('Conversion cancelled','AbortError');
 const ensureActive=signal=>{if(signal.aborted)throw abortError();};
 const pretty=n=>`${(n/1048576).toFixed(n<1048576?2:1)} MiB`;
@@ -69,51 +70,60 @@ async function convert(file,o,kind,signal,progress,audioContext,host,allowed){
 }
 export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
  if(studioOpen)throw Error('Another media editor is already open.');if(!files.length)return {uploaded:[],failures:[],cancelled:false};studioOpen=true;
- let dialog,previewUrl,previewMedia,audioContext,controller;const previousFocus=document.activeElement;
+ let dialog,visual,audioContext,controller;const previousFocus=document.activeElement;
  try{
  if(!document.querySelector('link[data-media-studio-css]')){const style=el('link',{rel:'stylesheet',href:new URL('./media-studio.css',import.meta.url).href});style.dataset.mediaStudioCss='';document.head.append(style);}
- const formats=await capabilities(allowedImageTypes);const rows=files.map(file=>({file,kind:mediaKind(file),o:defaults(file,formats),status:'Ready'}));
+ const formats=await capabilities(allowedImageTypes);const rows=files.map(file=>({file,kind:mediaKind(file),o:defaults(file,formats),base:filenameParts(file.name).base,prefix:'',status:'Ready'}));
  let selected=0,running=false,cancelled=false,settled=false,phase='idle';const result={uploaded:[],failures:[],cancelled:false};
  dialog=el('dialog',{className:'media-studio',ariaLabel:'Media conversion and upload'});
  const title=el('h2',{text:'Prepare media for upload'}),intro=el('p',{className:'sub small',text:'Convert locally, one file at a time. Images: WebP by default (GIF stays original). Video: MP4 when supported, otherwise WebM. No conversion runs on Cloudflare.'});
  const list=el('div',{className:'media-studio-list'}),editor=el('div',{className:'media-studio-editor'}),notice=el('p',{className:'media-studio-notice',text:'Choose an item to edit its settings, or apply settings to all items of the same type.'}),progress=el('progress',{max:1,value:0,className:'media-studio-progress'}),progressText=el('p',{className:'small',ariaLive:'polite',text:'Ready'});
  const start=el('button',{type:'button',className:'btn primary',text:'Convert & upload'}),cancel=el('button',{type:'button',className:'btn',text:'Cancel'});
- const preview=el('div',{className:'media-studio-preview'}),cropBox=el('span',{className:'media-studio-crop',ariaHidden:'true'});
- dialog.append(title,intro,el('div',{className:'media-studio-layout'},[list,el('div',{},[editor,preview])]),notice,progress,progressText,el('div',{className:'media-studio-actions'},[cancel,start]));document.body.append(dialog);dialog.showModal();
- const clearPreview=()=>{if(previewMedia?.tagName==='VIDEO'){previewMedia.pause();previewMedia.removeAttribute('src');previewMedia.load();}previewMedia=null;if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=null;preview.replaceChildren();};
- function syncCrop(){const o=rows[selected].o;cropBox.style.inset=`${o.top}% ${o.right}% ${o.bottom}% ${o.left}%`;cropBox.hidden=o.format==='original'||[o.left,o.top,o.right,o.bottom].every(v=>!Number(v));}
- function renderList(){list.replaceChildren(...rows.map((r,i)=>el('button',{type:'button',className:'media-studio-row'+(selected===i?' active':''),disabled:running,onclick:()=>{selected=i;clearPreview();renderList();renderEditor();}},[el('strong',{text:r.file.name}),el('small',{text:`${pretty(r.file.size)} · ${r.status}`})])));}
+ const preview=el('div',{className:'media-studio-preview'});
+ const prefix=el('input',{type:'text',maxLength:160,placeholder:'Prefix for all files (e.g. hospital-)',ariaLabel:'Bulk filename prefix'});
+ const prefixApply=el('button',{type:'button',className:'btn sm',text:'Apply prefix to all',onclick:()=>{for(const row of rows)row.prefix=prefix.value;renderList();renderEditor();}});
+ const naming=el('div',{className:'media-studio-naming'},[prefix,prefixApply]);
+ dialog.append(title,intro,naming,el('div',{className:'media-studio-layout'},[list,el('div',{},[editor,preview])]),notice,progress,progressText,el('div',{className:'media-studio-actions'},[cancel,start]));document.body.append(dialog);dialog.showModal();
+ const clearPreview=()=>{visual?.dispose();visual=null;preview.replaceChildren();};
+ function rowName(row){return namedOutput(row.base,row.prefix,outputExtension(row.file,row.o));}
+ function displayName(row){try{return rowName(row);}catch{return 'Invalid name';}}
+ function syncCrop(){visual?.refresh();}
+ function showPreview(){const row=rows[selected];clearPreview();if(row.kind==='other')return;if(row.file.size>MAX_UPLOAD){preview.textContent='Preview disabled for sources larger than 90 MiB.';return;}
+  visual=mountVisualEditor(preview,row.file,row.kind,()=>row.o,patch=>{Object.assign(row.o,patch);for(const input of editor.querySelectorAll('[data-setting]'))if(Object.hasOwn(patch,input.dataset.setting))input.value=String(patch[input.dataset.setting]);});
+ }
+ function renderList(){list.replaceChildren(...rows.map((r,i)=>el('button',{type:'button',className:'media-studio-row'+(selected===i?' active':''),disabled:running,onclick:()=>{selected=i;renderList();renderEditor();showPreview();}},[el('strong',{text:displayName(r)}),el('small',{text:`${pretty(r.file.size)} · ${r.status}`})])));}
  const field=(label,node)=>el('label',{className:'media-studio-field'},[el('span',{text:label}),node]);
- function select(label,key,choices,row,onChange){const select=el('select');for(const [value,text,disabled] of choices)select.append(el('option',{value:String(value),text,disabled:!!disabled}));select.value=String(row.o[key]);select.addEventListener('change',()=>{row.o[key]=key==='format'?select.value:Number(select.value);onChange?.();});return field(label,select);}
- function number(label,key,row,min,max,step=1){const input=el('input',{type:'number',min:String(min),max:String(max),step:String(step),value:String(row.o[key])});input.addEventListener('input',()=>{row.o[key]=input.value===''?NaN:Number(input.value);syncCrop();});return field(label,input);}
+ function select(label,key,choices,row,onChange){const select=el('select');for(const [value,text,disabled] of choices)select.append(el('option',{value:String(value),text,disabled:!!disabled}));select.value=String(row.o[key]);select.addEventListener('change',()=>{row.o[key]=key==='format'?select.value:Number(select.value);onChange?.();syncCrop();});return field(label,select);}
+ function number(label,key,row,min,max,step=1){const input=el('input',{type:'number',min:String(min),max:String(max),step:String(step),value:String(row.o[key])});input.dataset.setting=key;input.addEventListener('input',()=>{row.o[key]=input.value===''?NaN:Number(input.value);syncCrop();});return field(label,input);}
  function check(label,key,row,onChange){const input=el('input',{type:'checkbox',checked:!!row.o[key]});input.addEventListener('change',()=>{row.o[key]=input.checked;onChange?.();});return el('label',{className:'media-studio-check'},[input,el('span',{text:label})]);}
- function renderEditor(){const row=rows[selected],o=row.o;editor.replaceChildren(el('h3',{text:row.file.name}));if(row.kind==='other'){editor.append(el('p',{className:'sub small',text:'This file is uploaded unchanged. Conversion is available for images and videos only.'}));return;}
+ function renderEditor(){const row=rows[selected],o=row.o;editor.replaceChildren(el('h3',{text:row.file.name}));const name=el('input',{type:'text',maxLength:180,value:row.base,ariaLabel:'Individual filename without extension'});const finalName=el('p',{className:'small',text:displayName(row)});name.addEventListener('input',()=>{row.base=name.value;finalName.textContent=displayName(row);renderList();});editor.append(field('File name (without extension)',name),finalName);syncCrop();if(row.kind==='other'){editor.append(el('p',{className:'sub small',text:'This file is uploaded unchanged. Conversion is available for images and videos only.'}));return;}
   const choices=[['original','Keep original (no conversion)'],...(row.kind==='image'?formats.images.map(t=>[t,t.split('/')[1].toUpperCase()]):formats.videos.map(v=>[v.mime,v.label,!(o.audio?MediaRecorder.isTypeSupported(v.mime):MediaRecorder.isTypeSupported(v.silent))]))];
-  editor.append(select('Output format / codec','format',choices,row,()=>{syncCrop();renderEditor();}));
+  editor.append(select('Output format / codec','format',choices,row,()=>{renderList();renderEditor();}));
   if(o.format!=='original'){
-   if(row.kind==='image'){if(o.format!=='image/png')editor.append(number('Quality (%)','quality',row,1,100));editor.append(select('Maximum side (px)','maxSide',[[0,'Original (no enlargement)'],[800,'800'],[1280,'1280'],[1920,'1920'],[2560,'2560'],[3840,'3840']],row));}
-   else {editor.append(select('Maximum side (px)','maxSide',[[640,'640'],[960,'960'],[1280,'1280 · recommended'],[1920,'1920']],row),select('Frames per second','fps',[[15,'15'],[24,'24 · recommended'],[30,'30'],[60,'60 · heavier']],row),number('Video bitrate (kbps)','bitrate',row,100,30000,100),check('Keep audio','audio',row,renderEditor));if(o.audio)editor.append(select('Audio bitrate (kbps)','audioBitrate',[[64,'64'],[96,'96'],[128,'128'],[192,'192']],row));}
-   editor.append(el('p',{className:'small',text:'Crop: percent to remove from each edge; scaling preserves aspect ratio and never enlarges.'}),el('div',{className:'media-studio-crop-fields'},[['Left','left'],['Top','top'],['Right','right'],['Bottom','bottom']].map(([label,key])=>number(label+' %',key,row,0,99,1))));
+   if(row.kind==='image'){if(o.format!=='image/png')editor.append(number('Quality (%)','quality',row,1,100));editor.append(number('Maximum side (px; 0 = original)','maxSide',row,0,8192));}
+   else {editor.append(number('Maximum side (px)','maxSide',row,2,1920),select('Frames per second','fps',[[15,'15'],[24,'24 · recommended'],[30,'30'],[60,'60 · heavier']],row),number('Video bitrate (kbps)','bitrate',row,100,30000,100),check('Keep audio','audio',row,renderEditor));if(o.audio)editor.append(select('Audio bitrate (kbps)','audioBitrate',[[64,'64'],[96,'96'],[128,'128'],[192,'192']],row));}
+   editor.append(el('p',{className:'small',text:'Crop: percent to remove from each edge; scaling preserves aspect ratio and never enlarges.'}),el('div',{className:'media-studio-crop-fields'},[['Left','left'],['Top','top'],['Right','right'],['Bottom','bottom']].map(([label,key])=>number(label+' %',key,row,0,99.9,.1))));
   }
-  editor.append(el('div',{className:'media-studio-actions'},[el('button',{type:'button',className:'btn sm',text:'Preview source & crop',onclick:()=>{clearPreview();previewUrl=URL.createObjectURL(row.file);previewMedia=el(row.kind==='video'?'video':'img',row.kind==='video'?{src:previewUrl,controls:true,muted:true,preload:'metadata',playsInline:true}:{src:previewUrl,alt:'Source preview'});preview.append(el('div',{className:'media-studio-preview-frame'},[previewMedia,cropBox]));syncCrop();}}),el('button',{type:'button',className:'btn sm',text:`Apply settings to all ${row.kind==='image'?'images':'videos'}`,onclick:()=>{try{validateOptions(o,row.kind);for(const r of rows)if(r.kind===row.kind)r.o={...o};notice.textContent='Settings applied to every '+row.kind+' in the batch.';renderEditor();}catch(e){notice.textContent=e.message;}}})]));
+  editor.append(el('div',{className:'media-studio-actions'},[el('button',{type:'button',className:'btn sm',text:`Apply settings to all ${row.kind==='image'?'images':'videos'}`,onclick:()=>{try{validateOptions(o,row.kind);for(const r of rows)if(r.kind===row.kind)r.o={...o};notice.textContent='Settings applied to every '+row.kind+' in the batch.';renderList();renderEditor();}catch(e){notice.textContent=e.message;}}})]));
   if(row.kind==='image')editor.append(el('p',{className:'sub small',text:'Image conversion produces a still image. Keep animated GIF/WebP originals to preserve animation.'}));else editor.append(el('p',{className:'sub small',text:'Video conversion runs in real time. Keep this tab visible. Codec availability, exact bitrate, duration metadata and seeking depend on the browser.'}));
  }
- renderList();renderEditor();
+ renderList();renderEditor();showPreview();
  return await new Promise(resolve=>{
   function finish(){if(settled)return;settled=true;clearPreview();result.cancelled=cancelled;resolve(result);}
   function requestCancel(){if(running){cancelled=true;if(phase==='converting')controller?.abort();cancel.disabled=true;progressText.textContent=phase==='uploading'?'Finishing current upload, then stopping…':'Cancelling…';}else{cancelled=true;finish();}}
   cancel.addEventListener('click',()=>{if(!running&&result.uploaded.length+result.failures.length)finish();else requestCancel();});dialog.addEventListener('cancel',e=>{e.preventDefault();if(!running&&result.uploaded.length+result.failures.length)finish();else requestCancel();});dialog.addEventListener('keydown',e=>e.stopPropagation());
   start.addEventListener('click',async()=>{
    if(running||settled)return;
-   try{for(const row of rows)validateOptions(row.o,row.kind);}catch(e){notice.textContent=e.message;return;}
-   running=true;start.disabled=true;cancel.textContent='Cancel batch';editor.inert=true;clearPreview();renderList();
+   try{for(const row of rows){validateOptions(row.o,row.kind);rowName(row);}}catch(e){notice.textContent=e.message;return;}
+   running=true;start.disabled=true;cancel.textContent='Cancel batch';editor.inert=true;naming.inert=true;clearPreview();renderList();
    if(rows.some(r=>r.kind==='video'&&r.o.format!=='original'&&r.o.audio)){try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){audioContext=new AC();await Promise.race([audioContext.resume(),new Promise(resolve=>setTimeout(resolve,3000))]);}}catch{}}
    for(let i=0;i<rows.length&&!cancelled;i++){
     const row=rows[i];controller=new AbortController();phase='converting';row.status='Converting';renderList();progress.value=i/rows.length;progressText.textContent=`${i+1}/${rows.length} · ${row.file.name} · preparing`;
     try{
      await tick();const prepared=await convert(row.file,row.o,row.kind,controller.signal,p=>{progress.value=(i+p*.8)/rows.length;progressText.textContent=`${i+1}/${rows.length} · ${row.file.name} · ${Math.round(p*100)}% encoding`;},audioContext,dialog,allowedImageTypes);
      if(cancelled)break;phase='uploading';row.status='Uploading';renderList();progressText.textContent=`${i+1}/${rows.length} · uploading ${pretty(prepared.size)}`;
-     const uploaded=await upload(prepared);result.uploaded.push(uploaded);row.status=`Uploaded · ${pretty(prepared.size)}`;
+     const renamed=new File([prepared],rowName(row),{type:prepared.type,lastModified:prepared.lastModified});
+     const uploaded=await upload(renamed);result.uploaded.push(uploaded);row.status=`Uploaded · ${pretty(prepared.size)}`;
     }catch(e){if(cancelled||e.name==='AbortError'){row.status='Cancelled';break;}row.status='Failed: '+e.message;result.failures.push({name:row.file.name,message:e.message});}
     progress.value=(i+1)/rows.length;renderList();await tick();
    }
@@ -121,5 +131,5 @@ export async function openMediaStudio(files,upload,{allowedImageTypes}={}){
    if(audioContext){try{await audioContext.close();}catch{}audioContext=null;}if(rows.length===1&&!result.failures.length)finish();
   });
  });
- }finally{if(audioContext)try{await audioContext.close();}catch{}if(previewUrl)URL.revokeObjectURL(previewUrl);dialog?.close();dialog?.remove();studioOpen=false;previousFocus?.focus?.();}
+ }finally{if(audioContext)try{await audioContext.close();}catch{}visual?.dispose();dialog?.close();dialog?.remove();studioOpen=false;previousFocus?.focus?.();}
 }

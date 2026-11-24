@@ -190,6 +190,20 @@ async function main(req,env,ctx){
      return json({ok:true});
    }
    const mediaPath=path.match(/^\/api\/admin\/files\/([0-9a-f-]{36})(?:\/references)?$/i);
+   if(mediaPath&&req.method==='PATCH'&&!path.endsWith('/references')){
+     const id=mediaPath[1],body=await readBody(req),name=typeof body?.name==='string'?body.name.trim():'';
+     if(!name||name.length>180||/[\\/\x00-\x1f\x7f]/.test(name)||name==='.'||name==='..')return error('Invalid media filename',400);
+     const item=await getItem(env,'media',id);if(!item)return error('Media not found',404);
+     const extension=value=>{const text=String(value||'');const i=text.lastIndexOf('.');return i>0?text.slice(i):'';};
+     if(extension(name).toLowerCase()!==extension(item.name).toLowerCase())return error('Rename must preserve the original extension',400);
+     const row=await env.DB.prepare('SELECT object_key FROM media_files WHERE id=?').bind(id).first();if(!row)return error('File not found',404);
+     // Rename metadata in both D1 tables without touching the immutable R2 key.
+     await env.DB.batch([
+       env.DB.prepare('UPDATE media_files SET name=? WHERE id=?').bind(name,id),
+       env.DB.prepare("UPDATE content_items SET content=json_set(content,'$.name',?),updated_at=CURRENT_TIMESTAMP WHERE collection='media' AND id=?").bind(name,id)
+     ]);
+     return json({id,name});
+   }
    if(mediaPath && (req.method==='DELETE' || req.method==='GET' && path.endsWith('/references'))) {
      const id=mediaPath[1];
      const item=await env.DB.prepare('SELECT object_key FROM media_files WHERE id=?').bind(id).first();
