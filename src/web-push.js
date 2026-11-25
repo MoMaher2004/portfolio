@@ -34,16 +34,18 @@ async function ensure(db){await db.prepare(`CREATE TABLE IF NOT EXISTS push_devi
 const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const fail=(error,status=400)=>response({error},status);
 const pushFailure=reason=>({status:0,accepted:false,expired:false,reason});
-export async function sendPush(config,endpoint,fetcher=fetch){
+export async function sendPush(config,endpoint,fetcher=(...args)=>globalThis.fetch(...args)){
  if(!validEndpoint(endpoint))return pushFailure('invalid_endpoint');
  let auth;try{auth=await vapidAuthorization(config,endpoint);}catch{return pushFailure('signing_failed');}
  const controller=new AbortController();let timedOut=false;
  const timer=setTimeout(()=>{timedOut=true;controller.abort();},8000);
  try{
+  // Workers supports manual redirects, not redirect:error. Never forward VAPID credentials.
   // Explicit empty body gives the provider a zero-length POST. Do not send visitor data.
-  const res=await fetcher(endpoint,{method:'POST',redirect:'error',headers:{Authorization:auth,TTL:'3600',Urgency:'normal'},body:new Uint8Array(0),signal:controller.signal});
+  const res=await fetcher(endpoint,{method:'POST',redirect:'manual',headers:{Authorization:auth,TTL:'3600',Urgency:'normal'},body:new Uint8Array(0),signal:controller.signal});
   const result={status:res.status,accepted:res.ok,expired:res.status===404||res.status===410};
-  if(!res.ok&&!result.expired)result.reason='provider_rejected';
+  if(res.status>=300&&res.status<400)result.reason='redirect_rejected';
+  else if(!res.ok&&!result.expired)result.reason='provider_rejected';
   // A cleanup failure must not erase a real HTTP response.
   try{await res.body?.cancel();}catch{}
   return result;

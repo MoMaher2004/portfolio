@@ -6,12 +6,21 @@ async function hash(s){return Array.from(new Uint8Array(await crypto.subtle.dige
 export function pushResultText(r){
  if(r.accepted)return 'Push service accepted the test. Check the selected device.';
  if(r.expired)return 'Subscription expired and was removed. Enable notifications again on that device.';
- const reasons={invalid_endpoint:'Unsupported push provider. Register the device again.',key_mismatch:'The device uses an old VAPID key. Enable again on that device.',signing_failed:'Server could not sign the VAPID request. Check Worker configuration.',timeout:'Push provider did not respond before the timeout.',network_error:'Worker could not connect to the push provider (no HTTP response). Check Worker logs and retry.',provider_rejected:'Push provider rejected the request (HTTP '+r.status+').'};
+ const reasons={invalid_endpoint:'Unsupported push provider. Register the device again.',key_mismatch:'The device uses an old VAPID key. Enable again on that device.',signing_failed:'Server could not sign the VAPID request. Check Worker configuration.',timeout:'Push provider did not respond before the timeout.',network_error:'Worker could not connect to the push provider (no HTTP response). Check Worker logs and retry.',redirect_rejected:'Push provider returned a redirect (HTTP '+r.status+'). It was not followed for security.',provider_rejected:'Push provider rejected the request (HTTP '+r.status+').'};
  return reasons[r.reason]||('Push failed (HTTP '+(r.status||'unavailable')+').');
+}
+// Keep the registration action visible when permission is blocked; explain why it cannot proceed.
+export function enrollmentState(config,supported,permission,registered,localError=''){
+ if(!config)return {show:true,disabled:true,message:'Unable to load notification settings. Reopen this tab to retry.'};
+ if(!config.configured)return {show:true,disabled:true,message:'Web Push is not configured on the server.'};
+ if(!supported)return {show:true,disabled:true,message:'Web Push is unavailable in this browser. Use a supported normal Chrome, Edge or Firefox window, or the installed Home Screen app on iOS.'};
+ if(permission==='denied')return {show:true,disabled:false,message:'Notifications are blocked. Open the site permissions next to the address bar, set Notifications to Allow, then press Enable below.'};
+ if(registered)return {show:false,disabled:true,message:'Notifications enabled on this device. Its Test and Remove buttons are in the list below.'};
+ return {show:true,disabled:false,message:localError?'Browser registration could not be read ('+localError+'). Enable to try again.':'This device is not registered. Enable notifications to receive new message alerts.'};
 }
 export async function mountPushSettings(root,api){
  if(!root?.isConnected||root.dataset.mounted)return;root.dataset.mounted='true';
- root.innerHTML=`<div class="panel"><h3>This device</h3><p class="sub" data-device-status>Checking…</p><div data-enroll hidden><div class="field"><label>Device name<input data-label maxlength="80" placeholder="My phone"></label></div><button type="button" class="btn primary" data-enable>Enable on this device</button></div><p class="sub small">On iPhone/iPad, open the installed Home Screen app (iOS 16.4+). Use a normal browser, not private browsing.</p></div><div class="panel"><h3>Registered devices</h3><div data-devices>Loading…</div></div><p role="status" aria-live="polite" data-feedback></p>`;
+ root.innerHTML=`<div class="panel"><h3>This device</h3><p class="sub" data-device-status>Checking…</p><div data-enroll hidden><div class="field"><label>Device name<input data-label maxlength="80" placeholder="My phone"></label></div><button type="button" class="btn primary" data-enable>Enable on this device</button></div><p class="sub small">Installation is optional on Android and desktop Chrome. On iPhone/iPad, use the installed Home Screen app (iOS 16.4+). Use a normal browser, not private browsing.</p></div><div class="panel"><h3>Registered devices</h3><div data-devices>Loading…</div></div><p role="status" aria-live="polite" data-feedback></p>`;
  const $=s=>root.querySelector(s),feedback=s=>{$('[data-feedback]').textContent=s;};
  const enroll=$('[data-enroll]'),enable=$('[data-enable]'),label=$('[data-label]');
  const supported=isSecureContext&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
@@ -23,10 +32,13 @@ export async function mountPushSettings(root,api){
  }
  function paint(){
   if(!root.isConnected)return;
-  const registered=config?.devices.some(d=>d.id===id&&d.active)&&supported&&Notification.permission==='granted';
-  enroll.hidden=!config?.configured||!supported||registered||Notification.permission==='denied';
-  enable.disabled=busy;
-  $('[data-device-status]').textContent=!config?'Unable to load notification settings.':!config.configured?'Web Push is not configured on the server.':!supported?'Web Push is unavailable in this browser.':Notification.permission==='denied'?'Notifications are blocked. Allow notifications in browser settings and reopen this tab.':registered?'Notifications enabled on this device. Test or remove it below.':localError?'Browser registration could not be read ('+localError+'). Enable to try again.':'This device is not registered. Enable notifications to receive new message alerts.';
+  const permission=supported?Notification.permission:'unavailable';
+  const keyMatches=sub&&config?.publicKey&&equal(new Uint8Array(sub.options.applicationServerKey||[]),decode(config.publicKey));
+  const registered=Boolean(config?.devices.some(d=>d.id===id&&d.active)&&keyMatches&&permission==='granted');
+  const state=enrollmentState(config,supported,permission,registered,localError);
+  enroll.hidden=!state.show;
+  enable.disabled=busy||state.disabled;
+  $('[data-device-status]').textContent=state.message;
   const list=$('[data-devices]');list.replaceChildren();
   if(!config?.devices.length){list.textContent=config?'No registered devices.':'Unable to load devices.';return;}
   for(const d of config.devices){
@@ -43,7 +55,8 @@ export async function mountPushSettings(root,api){
  async function run(action){if(busy||!root.isConnected)return;busy=true;paint();feedback('Working…');try{await action();}catch(e){feedback(e.message||'Operation failed');}finally{busy=false;if(root.isConnected){try{await refresh();}catch(e){feedback(e.message||'Could not refresh devices');paint();}}}}
  enable.onclick=()=>run(async()=>{
   // Permission request is made in the actual click gesture. No registration on page load.
-  if(Notification.permission!=='granted'&&await Notification.requestPermission()!=='granted')throw Error('Notification permission was not granted.');
+  if(Notification.permission==='denied')throw Error('Notifications are blocked. Set Notifications to Allow in the site permissions, then press Enable again.');
+  if(Notification.permission!=='granted'&&await Notification.requestPermission()!=='granted')throw Error('Notification permission was not granted. Check the site permissions.');
   if(!root.isConnected)return;
   feedback('Preparing this device…');reg=await preparePushRegistration(navigator.serviceWorker);
   if(!root.isConnected)return;

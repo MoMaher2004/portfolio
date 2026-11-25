@@ -16,7 +16,7 @@ test('VAPID JWT has correct origin, expiration, uncompressed key and verified ES
 test('restrict endpoints to HTTPS push providers, prevent SSRF and redirects',async()=>{
  for(const u of [endpoint,'https://updates.push.services.mozilla.com/wpush/v2/test','https://web.push.apple.com/test','https://region.push.apple.com/test','https://x.notify.windows.com/test'])assert.equal(validEndpoint(u),true,u);
  for(const u of ['http://fcm.googleapis.com/test','https://fcm.googleapis.com.evil.test/a','https://web.push.apple.com.evil.test/a','https://evilpush.apple.com/a','https://127.0.0.1/a','https://fcm.googleapis.com:8080/a','https://user@fcm.googleapis.com/a','https://fcm.googleapis.com/a#x'])assert.equal(validEndpoint(u),false,u);
- const c=await loadVapid(env);const r=await sendPush(c,endpoint,async(url,opts)=>{assert.equal(url,endpoint);assert.equal(opts.redirect,'error');assert.equal(opts.body.byteLength,0);assert.equal(opts.headers.TTL,'3600');return new Response(null,{status:410});});assert.deepEqual(r,{status:410,accepted:false,expired:true});
+ const c=await loadVapid(env);const r=await sendPush(c,endpoint,async(url,opts)=>{assert.equal(url,endpoint);assert.equal(opts.redirect,'manual');assert.equal(opts.body.byteLength,0);assert.equal(opts.headers.TTL,'3600');return new Response(null,{status:410});});assert.deepEqual(r,{status:410,accepted:false,expired:true});
 });
 test('device id is stable and does not expose the endpoint',async()=>{assert.match(await deviceId(endpoint),/^[a-f0-9]{64}$/);assert.equal(await deviceId(endpoint),await deviceId(endpoint));assert.notEqual(await deviceId(endpoint),await deviceId(endpoint+'x'));});
 test('unconfigured feature does not touch database',async()=>{await notifyContact({});const result=await pushAdmin(new Request('https://maher2004.dev/api/admin/push'),{},'/api/admin/push');assert.deepEqual(await result.json(),{configured:false,devices:[]});});
@@ -43,4 +43,20 @@ test('preserves actual provider HTTP response even if body cleanup fails',async(
  const c=await loadVapid(env);
  const r=await sendPush(c,endpoint,async()=>({status:403,ok:false,body:{cancel(){throw Error('cleanup');}}}));
  assert.deepEqual(r,{status:403,accepted:false,expired:false,reason:'provider_rejected'});
+});
+
+
+test('Cloudflare-compatible fetch invocation and redirects are never followed',async()=>{
+ const c=await loadVapid(env);const original=globalThis.fetch;let calls=0;
+ try{
+  globalThis.fetch=async function(url,opts){
+   assert.equal(this,globalThis,'runtime fetch receiver must be preserved');
+   assert.equal(url,endpoint);assert.equal(opts.redirect,'manual');calls++;
+   return new Response(null,{status:302,headers:{Location:'https://evil.test/secret'}});
+  };
+  assert.deepEqual(await sendPush(c,endpoint),{status:302,accepted:false,expired:false,reason:'redirect_rejected'});
+  assert.equal(calls,1);
+  globalThis.fetch=async function(url,opts){assert.equal(this,globalThis);assert.equal(opts.redirect,'manual');return new Response(null,{status:201});};
+  assert.deepEqual(await sendPush(c,endpoint),{status:201,accepted:true,expired:false});
+ }finally{globalThis.fetch=original;}
 });
