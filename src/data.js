@@ -1,5 +1,6 @@
 import { readMessages } from './contact.js';
 import { defaults } from './defaults.js';
+import { orderHardSkills } from './skill-order.js';
 
 export const arrays = ['projects','experience','socials','views','hardSkills','softSkills','certificates','offers','customSections','media'];
 export const configs = ['hero','settings','brand','sections','sectionsOrder'];
@@ -19,6 +20,7 @@ export async function readSite(env, { admin=false }={}) {
   for(const r of conf.results||[]) {
     if(configs.includes(r.name)) { try { state[r.name]=JSON.parse(r.content) } catch {} }
   }
+  state.hardSkills=orderHardSkills(state.hardSkills);
   state.messages = admin ? await readMessages(env.DB) : [];
   if(!admin){
     state.projects=state.projects.filter(p=>p.published);
@@ -73,6 +75,7 @@ export function validateState(input){
 
 export async function putState(env,input){
   validateState(input);
+  input={...input,hardSkills:orderHardSkills(input.hardSkills)};
   const statements=[];
   for(const key of arrays) {
     const ids=[];
@@ -106,7 +109,8 @@ export async function seedOnce(env){
 export async function listCollection(env,name){
   if(!arrays.includes(name))throw new Error('Unsupported collection');
   const rows=await env.DB.prepare('SELECT content FROM content_items WHERE collection=? ORDER BY position').bind(name).all();
-  return (rows.results||[]).map(r=>JSON.parse(r.content));
+  const items=(rows.results||[]).map(r=>JSON.parse(r.content));
+  return name==='hardSkills'?orderHardSkills(items):items;
 }
 
 export async function replaceCollection(env,name,items){
