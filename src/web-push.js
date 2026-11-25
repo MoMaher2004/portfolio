@@ -33,20 +33,32 @@ async function ensure(db){await db.prepare(`CREATE TABLE IF NOT EXISTS push_devi
  )`).run();}
 const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const fail=(error,status=400)=>response({error},status);
+const pushFailure=reason=>({status:0,accepted:false,expired:false,reason});
 export async function sendPush(config,endpoint,fetcher=fetch){
- if(!validEndpoint(endpoint))return {status:0,accepted:false,expired:false};
- const auth=await vapidAuthorization(config,endpoint);
- const res=await fetcher(endpoint,{method:'POST',redirect:'error',headers:{Authorization:auth,TTL:'3600',Urgency:'normal'},signal:AbortSignal.timeout(8000)});
- if(res.body)await res.body.cancel().catch(()=>{});
- return {status:res.status,accepted:res.ok,expired:res.status===404||res.status===410};
+ if(!validEndpoint(endpoint))return pushFailure('invalid_endpoint');
+ let auth;try{auth=await vapidAuthorization(config,endpoint);}catch{return pushFailure('signing_failed');}
+ const controller=new AbortController();let timedOut=false;
+ const timer=setTimeout(()=>{timedOut=true;controller.abort();},8000);
+ try{
+  // Explicit empty body gives the provider a zero-length POST. Do not send visitor data.
+  const res=await fetcher(endpoint,{method:'POST',redirect:'error',headers:{Authorization:auth,TTL:'3600',Urgency:'normal'},body:new Uint8Array(0),signal:controller.signal});
+  const result={status:res.status,accepted:res.ok,expired:res.status===404||res.status===410};
+  if(!res.ok&&!result.expired)result.reason='provider_rejected';
+  // A cleanup failure must not erase a real HTTP response.
+  try{await res.body?.cancel();}catch{}
+  return result;
+ }catch(e){
+  const reason=timedOut?'timeout':'network_error';
+  // Do not log the endpoint, request, token, exception message or stack.
+  console.warn('Web push transport failure',reason,new URL(endpoint).hostname,e?.name||'Error');
+  return pushFailure(reason);
+ }finally{clearTimeout(timer);}
 }
 async function sendDevice(db,config,row){
- if(row.public_key!==config.publicKey)return {accepted:false,status:0,expired:false};
- try{
-  const result=await sendPush(config,row.endpoint);
-  if(result.expired)await db.prepare('DELETE FROM push_devices WHERE id=? AND public_key=?').bind(row.id,config.publicKey).run();
-  return result;
- }catch{return {accepted:false,status:0,expired:false};}
+ if(row.public_key!==config.publicKey)return pushFailure('key_mismatch');
+ const result=await sendPush(config,row.endpoint);
+ if(result.expired){try{await db.prepare('DELETE FROM push_devices WHERE id=? AND public_key=?').bind(row.id,config.publicKey).run();}catch{console.warn('Could not remove expired web push subscription');}}
+ return result;
 }
 // Call only after the contact message transaction commits. Never block or fail the contact request.
 export async function notifyContact(env){

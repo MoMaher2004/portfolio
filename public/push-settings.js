@@ -1,55 +1,58 @@
-import {preparePushRegistration} from './push-registration.js';
+import {preparePushRegistration,findPushRegistration} from './push-registration.js';
 const base='/api/admin/push';
 const decode=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
 const equal=(a,b)=>a&&b&&a.length===b.length&&a.every((v,i)=>v===b[i]);
 async function hash(s){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),v=>v.toString(16).padStart(2,'0')).join('');}
-export async function openPushSettings(api){
- if(document.querySelector('#push-settings'))return;
- const dialog=document.createElement('dialog');dialog.id='push-settings';dialog.className='dialog';dialog.style.maxWidth='min(560px, 92vw)';
- dialog.innerHTML=`<div class="dialog-head"><h2>Web Push notifications</h2><button type="button" class="round" data-close aria-label="Close">✕</button></div><p class="sub">Receive a private, generic notification when a contact message is saved. No message contents are sent to push providers.</p><p data-status role="status">Loading…</p><div class="field"><label>Device name<input data-label maxlength="80" placeholder="My phone"></label></div><div class="hero-ctas"><button class="btn primary" data-enable disabled>Enable on this device</button><button class="btn" data-disable disabled>Disable this device</button><button class="btn" data-retry>Retry registration</button><button class="btn" data-local disabled>Test local notification</button></div><h3>Registered devices</h3><div data-devices></div><p class="sub small">On iPhone/iPad, add /admin to Home Screen first (iOS 16.4+). Test on a registered device sends a real push via the browser provider. Test local notification checks only notification display. If registration is aborted, use a normal browser window (not private mode or an in-app browser), then retry.</p>`;
- const $=s=>dialog.querySelector(s),status=s=>{$('[data-status]').textContent=s;};
- dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
- let config,reg,sub,busy=false;
- const enable=$('[data-enable]'),disable=$('[data-disable]'),retry=$('[data-retry]'),local=$('[data-local]');
+export function pushResultText(r){
+ if(r.accepted)return 'Push service accepted the test. Check the selected device.';
+ if(r.expired)return 'Subscription expired and was removed. Enable notifications again on that device.';
+ const reasons={invalid_endpoint:'Unsupported push provider. Register the device again.',key_mismatch:'The device uses an old VAPID key. Enable again on that device.',signing_failed:'Server could not sign the VAPID request. Check Worker configuration.',timeout:'Push provider did not respond before the timeout.',network_error:'Worker could not connect to the push provider (no HTTP response). Check Worker logs and retry.',provider_rejected:'Push provider rejected the request (HTTP '+r.status+').'};
+ return reasons[r.reason]||('Push failed (HTTP '+(r.status||'unavailable')+').');
+}
+export async function mountPushSettings(root,api){
+ if(!root?.isConnected||root.dataset.mounted)return;root.dataset.mounted='true';
+ root.innerHTML=`<div class="panel"><h3>This device</h3><p class="sub" data-device-status>Checking…</p><div data-enroll hidden><div class="field"><label>Device name<input data-label maxlength="80" placeholder="My phone"></label></div><button type="button" class="btn primary" data-enable>Enable on this device</button></div><p class="sub small">On iPhone/iPad, open the installed Home Screen app (iOS 16.4+). Use a normal browser, not private browsing.</p></div><div class="panel"><h3>Registered devices</h3><div data-devices>Loading…</div></div><p role="status" aria-live="polite" data-feedback></p>`;
+ const $=s=>root.querySelector(s),feedback=s=>{$('[data-feedback]').textContent=s;};
+ const enroll=$('[data-enroll]'),enable=$('[data-enable]'),label=$('[data-label]');
  const supported=isSecureContext&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
- async function refresh(){
-  config=await api(base);sub=reg?await reg.pushManager.getSubscription():null;
-  const id=sub?await hash(sub.endpoint):null;const registered=config.devices.some(d=>d.id===id&&d.active);
-  enable.disabled=busy||!supported||!config.configured||!reg||registered;disable.disabled=busy||!sub;retry.disabled=busy||!supported||!config.configured;local.disabled=busy||!reg||Notification.permission!=='granted';
-  const list=$('[data-devices]');list.replaceChildren();
-  if(!config.devices.length)list.textContent='No registered devices.';
-  for(const d of config.devices){
-   const row=document.createElement('div');row.className='panel';const title=document.createElement('p');title.textContent=d.label+(id===d.id?' (this device)':'')+(d.active?'':' — old key');row.append(title);
-   for(const [label,action] of [['Test',async()=>{const r=await api(base+'/devices/'+d.id+'/test',{method:'POST'});status(r.accepted?'Accepted by push service; check your device.':'Push not accepted (status '+r.status+'). Re-enable if expired.');}],['Remove',async()=>{await api(base+'/devices/'+d.id,{method:'DELETE'});if(sub&&id===d.id)await sub.unsubscribe();status('Device removed.');}]]){
-    const button=document.createElement('button');button.type='button';button.className='btn sm';button.textContent=label;button.disabled=busy||label==='Test'&&!d.active;button.onclick=()=>run(action);row.append(button);
-   }list.append(row);
-  }
-  return registered;
+ let config=null,reg=null,sub=null,id=null,busy=false,localError='';
+ async function readLocal(){
+  reg=null;sub=null;id=null;localError='';if(!supported)return;
+  try{reg=await findPushRegistration(navigator.serviceWorker);sub=reg?await reg.pushManager.getSubscription():null;id=sub?await hash(sub.endpoint):null;}
+  catch(e){localError=e.name||'Error';}
  }
- async function run(action){if(busy)return;busy=true;enable.disabled=disable.disabled=retry.disabled=local.disabled=true;for(const button of $('[data-devices]').querySelectorAll('button'))button.disabled=true;try{await action();}catch(e){status(e.message||'Operation failed');}finally{busy=false;try{await refresh();}catch(e){status(e.message||'Could not refresh devices');}}}
+ function paint(){
+  if(!root.isConnected)return;
+  const registered=config?.devices.some(d=>d.id===id&&d.active)&&supported&&Notification.permission==='granted';
+  enroll.hidden=!config?.configured||!supported||registered||Notification.permission==='denied';
+  enable.disabled=busy;
+  $('[data-device-status]').textContent=!config?'Unable to load notification settings.':!config.configured?'Web Push is not configured on the server.':!supported?'Web Push is unavailable in this browser.':Notification.permission==='denied'?'Notifications are blocked. Allow notifications in browser settings and reopen this tab.':registered?'Notifications enabled on this device. Test or remove it below.':localError?'Browser registration could not be read ('+localError+'). Enable to try again.':'This device is not registered. Enable notifications to receive new message alerts.';
+  const list=$('[data-devices]');list.replaceChildren();
+  if(!config?.devices.length){list.textContent=config?'No registered devices.':'Unable to load devices.';return;}
+  for(const d of config.devices){
+   const row=document.createElement('div');row.className='panel';
+   const title=document.createElement('strong');title.textContent=d.label+(id===d.id?' (this device)':'');row.append(title);
+   const detail=document.createElement('p');detail.className='sub small';detail.textContent=(d.active?'Registered':'Re-registration required')+(d.created_at?' · '+d.created_at+' UTC':'');row.append(detail);
+   const actions=document.createElement('div');actions.className='hero-ctas';
+   for(const [name,action] of [['Test',async()=>{feedback(pushResultText(await api(base+'/devices/'+d.id+'/test',{method:'POST'})));}],['Remove',async()=>{await api(base+'/devices/'+d.id,{method:'DELETE'});if(id===d.id&&sub){try{await sub.unsubscribe();}catch{feedback('Server subscription removed; browser unsubscribe failed.');return;}}feedback('Device removed.');}]]){
+    const button=document.createElement('button');button.type='button';button.className='btn sm'+(name==='Remove'?' danger':'');button.textContent=name;button.disabled=busy||(name==='Test'&&!d.active);button.onclick=()=>run(action);actions.append(button);
+   }row.append(actions);list.append(row);
+  }
+ }
+ async function refresh(){config=await api(base);await readLocal();paint();}
+ async function run(action){if(busy||!root.isConnected)return;busy=true;paint();feedback('Working…');try{await action();}catch(e){feedback(e.message||'Operation failed');}finally{busy=false;if(root.isConnected){try{await refresh();}catch(e){feedback(e.message||'Could not refresh devices');paint();}}}}
  enable.onclick=()=>run(async()=>{
-  // Request permission directly inside the click handler, before other awaits.
-  if(Notification.permission!=='granted'&&await Notification.requestPermission()!=='granted')throw Error('Notification permission was not granted. Check browser settings.');
+  // Permission request is made in the actual click gesture. No registration on page load.
+  if(Notification.permission!=='granted'&&await Notification.requestPermission()!=='granted')throw Error('Notification permission was not granted.');
+  if(!root.isConnected)return;
+  feedback('Preparing this device…');reg=await preparePushRegistration(navigator.serviceWorker);
+  if(!root.isConnected)return;
   const key=decode(config.publicKey);let current=await reg.pushManager.getSubscription();
   if(current&&!equal(new Uint8Array(current.options.applicationServerKey||[]),key)){await current.unsubscribe();current=null;}
   current=current||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
-  await api(base+'/subscribe',{method:'POST',body:{endpoint:current.endpoint,publicKey:config.publicKey,label:$('[data-label]').value}});status('Notifications enabled on this device. Use Test to verify delivery.');
+  if(!root.isConnected)return;
+  await api(base+'/subscribe',{method:'POST',body:{endpoint:current.endpoint,publicKey:config.publicKey,label:label.value}});
+  feedback('Notifications enabled. Use Test next to this device to verify delivery.');
  });
- disable.onclick=()=>run(async()=>{if(!sub)return;await api(base+'/devices/'+await hash(sub.endpoint),{method:'DELETE'});await sub.unsubscribe();status('Notifications disabled on this device.');});
- async function initialize(){
-  config=await api(base);
-  if(!config.configured){status('Set PUSH_VAPID_JWK in Cloudflare first.');return;}
-  if(!supported){status('Web Push unavailable here. Use a supported normal browser or an installed Home Screen app on iOS.');return;}
-  status('Registering service worker…');
-  reg=await preparePushRegistration(navigator.serviceWorker);
-  const registered=await refresh();
-  status(registered?'Notifications enabled on this device. Use Test in Registered devices.':'Service worker active. Enable notifications on this device to register with the server.');
- }
- retry.onclick=()=>run(initialize);
- local.onclick=()=>run(async()=>{
-  if(!reg||Notification.permission!=='granted')throw Error('Enable notifications first.');
-  await reg.showNotification('Portfolio local test',{body:'Local notification display works. This is not a remote push.',icon:'/push-icon-192.png'});
-  status('Local notification requested. Use Test in Registered devices for real push delivery.');
- });
- await run(initialize);
+ try{await refresh();}catch(e){feedback(e.message||'Could not load notifications');paint();}
 }

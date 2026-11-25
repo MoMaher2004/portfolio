@@ -1,6 +1,5 @@
 // Dedicated admin service worker: no fetch handler, no token, no caching.
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
-self.addEventListener('activate',event=>event.waitUntil(self.clients.claim().catch(()=>{})));
 self.addEventListener('push',event=>event.waitUntil(self.registration.showNotification('Portfolio inbox',{
  body:'New inbox activity. Tap to check your messages.',icon:new URL('/push-icon-192.png',self.location.origin).href,
  data:{url:'/admin?tab=inbox'}

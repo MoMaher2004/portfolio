@@ -16,7 +16,7 @@ test('VAPID JWT has correct origin, expiration, uncompressed key and verified ES
 test('restrict endpoints to HTTPS push providers, prevent SSRF and redirects',async()=>{
  for(const u of [endpoint,'https://updates.push.services.mozilla.com/wpush/v2/test','https://web.push.apple.com/test','https://region.push.apple.com/test','https://x.notify.windows.com/test'])assert.equal(validEndpoint(u),true,u);
  for(const u of ['http://fcm.googleapis.com/test','https://fcm.googleapis.com.evil.test/a','https://web.push.apple.com.evil.test/a','https://evilpush.apple.com/a','https://127.0.0.1/a','https://fcm.googleapis.com:8080/a','https://user@fcm.googleapis.com/a','https://fcm.googleapis.com/a#x'])assert.equal(validEndpoint(u),false,u);
- const c=await loadVapid(env);const r=await sendPush(c,endpoint,async(url,opts)=>{assert.equal(url,endpoint);assert.equal(opts.redirect,'error');assert.equal(opts.body,undefined);assert.equal(opts.headers.TTL,'3600');return new Response(null,{status:410});});assert.deepEqual(r,{status:410,accepted:false,expired:true});
+ const c=await loadVapid(env);const r=await sendPush(c,endpoint,async(url,opts)=>{assert.equal(url,endpoint);assert.equal(opts.redirect,'error');assert.equal(opts.body.byteLength,0);assert.equal(opts.headers.TTL,'3600');return new Response(null,{status:410});});assert.deepEqual(r,{status:410,accepted:false,expired:true});
 });
 test('device id is stable and does not expose the endpoint',async()=>{assert.match(await deviceId(endpoint),/^[a-f0-9]{64}$/);assert.equal(await deviceId(endpoint),await deviceId(endpoint));assert.notEqual(await deviceId(endpoint),await deviceId(endpoint+'x'));});
 test('unconfigured feature does not touch database',async()=>{await notifyContact({});const result=await pushAdmin(new Request('https://maher2004.dev/api/admin/push'),{},'/api/admin/push');assert.deepEqual(await result.json(),{configured:false,devices:[]});});
@@ -31,4 +31,16 @@ test('D1-compatible SQL registers five devices, updates existing, and removes ex
  const state=await (await pushAdmin(req(base),e,base)).json();assert.equal(state.devices.length,5);assert.equal(state.devices.find(d=>d.label==='Renamed')?.id,await deviceId(endpoint+'0'));assert.equal('endpoint' in state.devices[0],false);
  const original=globalThis.fetch;try{globalThis.fetch=async()=>new Response(null,{status:410});await notifyContact(e);}finally{globalThis.fetch=original;}
  assert.equal((await (await pushAdmin(req(base),e,base)).json()).devices.length,0);sqlite.close();
+});
+
+test('transport failure reports no HTTP response without leaking endpoint',async()=>{
+ const c=await loadVapid(env);const r=await sendPush(c,endpoint,async()=>{throw new TypeError('secret endpoint');});
+ assert.deepEqual(r,{status:0,accepted:false,expired:false,reason:'network_error'});
+ assert.equal((await sendPush(c,'https://evil.test/path')).reason,'invalid_endpoint');
+ assert.equal((await sendPush({...c,key:null},endpoint)).reason,'signing_failed');
+});
+test('preserves actual provider HTTP response even if body cleanup fails',async()=>{
+ const c=await loadVapid(env);
+ const r=await sendPush(c,endpoint,async()=>({status:403,ok:false,body:{cancel(){throw Error('cleanup');}}}));
+ assert.deepEqual(r,{status:403,accepted:false,expired:false,reason:'provider_rejected'});
 });
