@@ -5,6 +5,7 @@ import { defaults } from './defaults.js';
 import { findMediaReferences } from './media-usage.js';
 import { serveMedia } from './media-response.js';
 import { exportBackup } from './backup-export.js';
+import { notifyContact, pushAdmin } from './web-push.js';
 
 const json = (value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...extra}});
 const error=(message,status=400)=>json({error:message},status);
@@ -139,6 +140,7 @@ async function main(req,env,ctx){
    await env.DB.prepare('DELETE FROM auth_attempts WHERE ip_hash=?').bind(key).run();
    if(path==='/api/admin/verify'&&req.method==='POST')return json({ok:true});
    if(path==='/api/admin/seed'&&req.method==='POST')return json({created:await seedOnce(env)});
+   if(path==='/api/admin/push'||path.startsWith('/api/admin/push/'))return pushAdmin(req,env,path,readBody);
    if(path==='/api/admin/export'&&req.method==='GET')return exportBackup(env,url.searchParams.get('parts'));
    if(path==='/api/admin/state'&&req.method==='GET')return json(await readSite(env,{admin:true}));
    if(path==='/api/admin/state'&&req.method==='PUT') {await putState(env,await readBody(req));return json({ok:true})}
@@ -267,6 +269,7 @@ async function main(req,env,ctx){
        .bind(id,contact.method,contact.phone,ip,userAgent),
      env.DB.prepare('INSERT INTO message_countries(id,ip_country,phone_country) VALUES(?,?,?)').bind(id,country,contact.country??null),
    ]);
+   ctx.waitUntil(notifyContact(env).catch(()=>console.warn('Web push notification failed')));
    return json({ok:true},201);
  }
  if(/^\/media\/[0-9a-f-]{36}$/.test(path)&&['GET','HEAD'].includes(req.method)){
