@@ -151,3 +151,23 @@ curl --fail-with-body -X POST 'https://maher2004.dev/api/admin/files?name=cover.
 The uploaded media must also exist in the `media` CMS collection; R2 uploads create an R2 object and an internal SQL media record, but the CMS editable media array is a separate collection. The dashboard and supplied agent helper handle this registration automatically.
 
 The default tab icon is `/favicon.png`, generated locally with Pillow (blue rounded square + white M) without AI; an uploaded favicon/logo in Dashboard Settings overrides it.
+
+
+## Web Push notifications
+
+All endpoints below require the same admin bearer authentication as other admin APIs. See [WEB_PUSH.md](WEB_PUSH.md) for setup, browser compatibility, transport troubleshooting and encryption details. The architecture and maintenance guide is in [README.md](../README.md).
+
+| Method | Path | Request / response |
+|---|---|---|
+| GET | `/api/admin/push` | `{configured,publicKey?,devices}`; each device has `id,label,created_at,active,preview` when configured. No raw endpoint or encryption secret is returned. |
+| POST | `/api/admin/push/subscribe` | `{endpoint,publicKey,label,keys?}`; optional `keys: {p256dh,auth}`. Returns `{id}` with 201; 409 when five-device cap is reached. |
+| POST | `/api/admin/push/devices/:id/test` | Send a generic or encrypted sample push; returns `{status,accepted,expired,reason?}`. |
+| DELETE | `/api/admin/push/devices/:id` | Remove server subscription and associated encryption keys; `{ok:true}`. Browser unsubscribe is a separate client action. |
+
+- `id` is the 64-character lowercase SHA-256 hex digest of the push endpoint. The VAPID public key must match the configured key. Only supported HTTPS provider hosts are accepted. Old-key devices still count toward the five-device limit.
+- The optional encryption keys come from the browser PushSubscription; p256dh is a base64url uncompressed P-256 public key (65 bytes), and auth is a base64url 16-byte secret. Existing clients omitting keys do not clear stored preview credentials. Never fabricate keys or endpoints.
+- Notification previews are encrypted using RFC 8291 / 8188 aes128gcm. Legacy devices receive a generic payload-free notification. Actual contact notifications include the sender name and a bounded 100-code-point preview; the test uses synthetic text.
+- A test result with status 0 indicates a failure without a provider HTTP response. The safe reason can be invalid_endpoint, key_mismatch, signing_failed, encryption_failed, timeout or network_error. Provider rejections and redirects are reported separately (provider_rejected, redirect_rejected). Expired subscriptions (404/410) are removed. Provider acceptance does not prove device display.
+- 503 indicates missing/invalid server VAPID configuration; 404 indicates a missing test device; 409 can indicate a key mismatch or capacity limit. Admin authentication and origin checks apply before these handlers.
+- Push is best effort and scheduled after successful contact storage. Do not treat an accepted notification as evidence of message delivery. The inbox remains authoritative. Do not send tests or remove registrations without authorization.
+- The full SQL backup can include private device endpoints and encryption credentials. Do not expose these or the separate VAPID private JWK in logs, chat or public files.
