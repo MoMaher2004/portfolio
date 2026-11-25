@@ -269,7 +269,7 @@ async function main(req,env,ctx){
        .bind(id,contact.method,contact.phone,ip,userAgent),
      env.DB.prepare('INSERT INTO message_countries(id,ip_country,phone_country) VALUES(?,?,?)').bind(id,country,contact.country??null),
    ]);
-   ctx.waitUntil(notifyContact(env).catch(()=>console.warn('Web push notification failed')));
+   ctx.waitUntil(notifyContact(env,{name,message}).catch(()=>console.warn('Web push notification failed')));
    return json({ok:true},201);
  }
  if(/^\/media\/[0-9a-f-]{36}$/.test(path)&&['GET','HEAD'].includes(req.method)){

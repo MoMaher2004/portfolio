@@ -1,6 +1,6 @@
 # Private admin Web Push
 
-No npm dependency or paid notification service. Requires HTTPS and a supported browser. On iOS/iPadOS 16.4+ install `/admin` via Add to Home Screen, then enable from within the installed app. Notifications contain a generic inbox alert only; no sender name, contact details, or message body. They are best effort, not guaranteed delivery. The contact response is independent of notification success. Five devices maximum. Expired endpoints (404/410) are removed. No retries; the inbox remains the source of truth.
+No npm dependency or paid notification service. Requires HTTPS and a supported browser. On iOS/iPadOS 16.4+ install `/admin` via Add to Home Screen, then enable from within the installed app. Preview-enabled devices receive the sender name and up to 100 Unicode code points of the message (including an ellipsis when truncated), encrypted with RFC 8291 aes128gcm. Legacy devices receive generic alerts until upgraded. Names and previews may appear on lock screens; no separate email, phone, IP or full message is included. They are best effort, not guaranteed delivery. The contact response is independent of notification success. Five devices maximum. Expired endpoints (404/410) are removed. No retries; the inbox remains the source of truth.
 
 ## One-time setup
 
@@ -12,11 +12,11 @@ mkdir -p "$HOME/.config/maher-portfolio" && chmod 700 "$HOME/.config/maher-portf
 npx wrangler secret put PUSH_VAPID_JWK < "$HOME/.config/maher-portfolio/push-vapid.json"
 ```
 
-If the file already exists, reuse it in `wrangler secret put`, don't regenerate it. The `push_devices` table is created on first configured use (no migration needed), and the SQL database backup includes it. Treat the backup as private. Keep the VAPID key separately, since Worker secrets are not exported in the database dump.
+If the file already exists, reuse it in `wrangler secret put`, don't regenerate it. The `push_devices` and `push_device_keys` tables are created on first configured use (no migration needed), and the SQL database backup includes them. Treat the backup as private. Keep the VAPID key separately, since Worker secrets are not exported in the database dump.
 
 Open `/admin`, authenticate, choose Notifications, enter device label and Enable on this device. Accept the permission prompt; use Test and confirm the device receives the notification. Then submit a real contact message to verify the full workflow. Removing a device stops server delivery; removing the current browser also unsubscribes it locally. A dashboard logout intentionally does not disable push. Clicking opens `/admin?tab=inbox` and still requires admin authentication.
 
-Authenticated API (same admin bearer auth as existing APIs): GET `/api/admin/push` returns configured/publicKey/device labels and IDs (not endpoints); POST `/api/admin/push/subscribe` body `{endpoint,publicKey,label}`; DELETE `/api/admin/push/devices/:id`; POST `/api/admin/push/devices/:id/test` returns push-service acceptance, not proof of device delivery. Endpoint destinations are restricted to known browser push service hosts and redirects forbidden. No payload encryption is required because there is no payload. VAPID authenticates sending; private signing key stays on the Worker.
+Authenticated API (same admin bearer auth as existing APIs): GET `/api/admin/push` returns configured/publicKey/device labels and IDs (not endpoints); POST `/api/admin/push/subscribe` body `{endpoint,publicKey,label,keys:{p256dh,auth}}` (legacy clients may omit keys); DELETE `/api/admin/push/devices/:id`; POST `/api/admin/push/devices/:id/test` returns push-service acceptance, not proof of device delivery. Endpoint destinations are restricted to known browser push service hosts and redirects forbidden. Preview payloads use ephemeral ECDH, HKDF-SHA256 and AES-128-GCM per RFC 8291. VAPID authenticates sending; private signing key stays on the Worker. Subscription keys are never included in device list responses. Existing devices can open Notifications and select Enable message previews without changing their VAPID key or endpoint. Test sends a sample preview on upgraded devices.
 
 ## Registration troubleshooting
 

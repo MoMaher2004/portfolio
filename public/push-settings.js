@@ -6,7 +6,7 @@ async function hash(s){return Array.from(new Uint8Array(await crypto.subtle.dige
 export function pushResultText(r){
  if(r.accepted)return 'Push service accepted the test. Check the selected device.';
  if(r.expired)return 'Subscription expired and was removed. Enable notifications again on that device.';
- const reasons={invalid_endpoint:'Unsupported push provider. Register the device again.',key_mismatch:'The device uses an old VAPID key. Enable again on that device.',signing_failed:'Server could not sign the VAPID request. Check Worker configuration.',timeout:'Push provider did not respond before the timeout.',network_error:'Worker could not connect to the push provider (no HTTP response). Check Worker logs and retry.',redirect_rejected:'Push provider returned a redirect (HTTP '+r.status+'). It was not followed for security.',provider_rejected:'Push provider rejected the request (HTTP '+r.status+').'};
+ const reasons={invalid_endpoint:'Unsupported push provider. Register the device again.',key_mismatch:'The device uses an old VAPID key. Enable again on that device.',encryption_failed:'Server could not encrypt the preview. Remove and re-enable this device.',signing_failed:'Server could not sign the VAPID request. Check Worker configuration.',timeout:'Push provider did not respond before the timeout.',network_error:'Worker could not connect to the push provider (no HTTP response). Check Worker logs and retry.',redirect_rejected:'Push provider returned a redirect (HTTP '+r.status+'). It was not followed for security.',provider_rejected:'Push provider rejected the request (HTTP '+r.status+').'};
  return reasons[r.reason]||('Push failed (HTTP '+(r.status||'unavailable')+').');
 }
 // Keep the registration action visible when permission is blocked; explain why it cannot proceed.
@@ -20,9 +20,9 @@ export function enrollmentState(config,supported,permission,registered,localErro
 }
 export async function mountPushSettings(root,api){
  if(!root?.isConnected||root.dataset.mounted)return;root.dataset.mounted='true';
- root.innerHTML=`<div class="panel"><h3>This device</h3><p class="sub" data-device-status>Checking…</p><div data-enroll hidden><div class="field"><label>Device name<input data-label maxlength="80" placeholder="My phone"></label></div><button type="button" class="btn primary" data-enable>Enable on this device</button></div><p class="sub small">Installation is optional on Android and desktop Chrome. On iPhone/iPad, use the installed Home Screen app (iOS 16.4+). Use a normal browser, not private browsing.</p></div><div class="panel"><h3>Registered devices</h3><div data-devices>Loading…</div></div><p role="status" aria-live="polite" data-feedback></p>`;
+ root.innerHTML=`<div class="panel"><h3>This device</h3><p class="sub" data-device-status>Checking…</p><div data-enroll hidden><div class="field"><label>Device name<input data-label maxlength="80" placeholder="My phone"></label></div><button type="button" class="btn primary" data-enable>Enable on this device</button></div><p class="sub small">Installation is optional on Android and desktop Chrome. On iPhone/iPad, use the installed Home Screen app (iOS 16.4+). Use a normal browser, not private browsing. Message previews may be visible on your lock screen.</p><div data-upgrade-wrap hidden><button type="button" class="btn primary" data-upgrade>Enable message previews</button></div></div><div class="panel"><h3>Registered devices</h3><div data-devices>Loading…</div></div><p role="status" aria-live="polite" data-feedback></p>`;
  const $=s=>root.querySelector(s),feedback=s=>{$('[data-feedback]').textContent=s;};
- const enroll=$('[data-enroll]'),enable=$('[data-enable]'),label=$('[data-label]');
+ const enroll=$('[data-enroll]'),enable=$('[data-enable]'),label=$('[data-label]'),upgrade=$('[data-upgrade]');
  const supported=isSecureContext&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
  let config=null,reg=null,sub=null,id=null,busy=false,localError='';
  async function readLocal(){
@@ -38,13 +38,15 @@ export async function mountPushSettings(root,api){
   const state=enrollmentState(config,supported,permission,registered,localError);
   enroll.hidden=!state.show;
   enable.disabled=busy||state.disabled;
+  const currentDevice=config?.devices.find(d=>d.id===id);
+  $('[data-upgrade-wrap]').hidden=!registered||Boolean(currentDevice?.preview);upgrade.disabled=busy;
   $('[data-device-status]').textContent=state.message;
   const list=$('[data-devices]');list.replaceChildren();
   if(!config?.devices.length){list.textContent=config?'No registered devices.':'Unable to load devices.';return;}
   for(const d of config.devices){
    const row=document.createElement('div');row.className='panel';
    const title=document.createElement('strong');title.textContent=d.label+(id===d.id?' (this device)':'');row.append(title);
-   const detail=document.createElement('p');detail.className='sub small';detail.textContent=(d.active?'Registered':'Re-registration required')+(d.created_at?' · '+d.created_at+' UTC':'');row.append(detail);
+   const detail=document.createElement('p');detail.className='sub small';detail.textContent=(d.active?(d.preview?'Registered · message previews enabled':'Registered · generic alerts only'):'Re-registration required')+(d.created_at?' · '+d.created_at+' UTC':'');row.append(detail);
    const actions=document.createElement('div');actions.className='hero-ctas';
    for(const [name,action] of [['Test',async()=>{feedback(pushResultText(await api(base+'/devices/'+d.id+'/test',{method:'POST'})));}],['Remove',async()=>{await api(base+'/devices/'+d.id,{method:'DELETE'});if(id===d.id&&sub){try{await sub.unsubscribe();}catch{feedback('Server subscription removed; browser unsubscribe failed.');return;}}feedback('Device removed.');}]]){
     const button=document.createElement('button');button.type='button';button.className='btn sm'+(name==='Remove'?' danger':'');button.textContent=name;button.disabled=busy||(name==='Test'&&!d.active);button.onclick=()=>run(action);actions.append(button);
@@ -64,8 +66,20 @@ export async function mountPushSettings(root,api){
   if(current&&!equal(new Uint8Array(current.options.applicationServerKey||[]),key)){await current.unsubscribe();current=null;}
   current=current||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
   if(!root.isConnected)return;
-  await api(base+'/subscribe',{method:'POST',body:{endpoint:current.endpoint,publicKey:config.publicKey,label:label.value}});
+  await saveSubscription(current,label.value);
   feedback('Notifications enabled. Use Test next to this device to verify delivery.');
+ });
+ async function saveSubscription(current,deviceLabel){
+  const keys=current.toJSON().keys;
+  if(!keys?.p256dh||!keys?.auth)throw Error('Browser did not provide Web Push encryption keys.');
+  await api(base+'/subscribe',{method:'POST',body:{endpoint:current.endpoint,publicKey:config.publicKey,label:deviceLabel,keys:{p256dh:keys.p256dh,auth:keys.auth}}});
+ }
+ upgrade.onclick=()=>run(async()=>{
+  const currentDevice=config?.devices.find(d=>d.id===id&&d.active);
+  if(!sub||!currentDevice)throw Error('Current device is not registered.');
+  await reg.update().catch(()=>{});
+  await saveSubscription(sub,currentDevice.label);
+  feedback('Message previews enabled. Use Test to check; reopen this page if the old generic alert still appears.');
  });
  try{await refresh();}catch(e){feedback(e.message||'Could not load notifications');paint();}
 }
