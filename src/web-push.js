@@ -8,7 +8,7 @@ export function validEndpoint(value){
  if(typeof value!=='string'||value.length>2048)return false;
  try{
   const u=new URL(value),h=u.hostname;
-  const trusted=h==='fcm.googleapis.com'||h==='updates.push.services.mozilla.com'||h==='web.push.apple.com'||h.endsWith('.notify.windows.com');
+  const trusted=h==='fcm.googleapis.com'||h==='updates.push.services.mozilla.com'||h.endsWith('.push.apple.com')||h.endsWith('.notify.windows.com');
   return trusted&&u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&!u.hash&&u.pathname.length>1&&u.href===value;
  }catch{return false;}
 }

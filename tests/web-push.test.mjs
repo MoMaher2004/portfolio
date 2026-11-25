@@ -14,8 +14,8 @@ test('VAPID JWT has correct origin, expiration, uncompressed key and verified ES
  assert.equal(verify('sha256',Buffer.from(h+'.'+p),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(s,'base64url')),true);
 });
 test('restrict endpoints to HTTPS push providers, prevent SSRF and redirects',async()=>{
- for(const u of [endpoint,'https://updates.push.services.mozilla.com/wpush/v2/test','https://web.push.apple.com/test','https://x.notify.windows.com/test'])assert.equal(validEndpoint(u),true,u);
- for(const u of ['http://fcm.googleapis.com/test','https://fcm.googleapis.com.evil.test/a','https://127.0.0.1/a','https://fcm.googleapis.com:8080/a','https://user@fcm.googleapis.com/a','https://fcm.googleapis.com/a#x'])assert.equal(validEndpoint(u),false,u);
+ for(const u of [endpoint,'https://updates.push.services.mozilla.com/wpush/v2/test','https://web.push.apple.com/test','https://region.push.apple.com/test','https://x.notify.windows.com/test'])assert.equal(validEndpoint(u),true,u);
+ for(const u of ['http://fcm.googleapis.com/test','https://fcm.googleapis.com.evil.test/a','https://web.push.apple.com.evil.test/a','https://evilpush.apple.com/a','https://127.0.0.1/a','https://fcm.googleapis.com:8080/a','https://user@fcm.googleapis.com/a','https://fcm.googleapis.com/a#x'])assert.equal(validEndpoint(u),false,u);
  const c=await loadVapid(env);const r=await sendPush(c,endpoint,async(url,opts)=>{assert.equal(url,endpoint);assert.equal(opts.redirect,'error');assert.equal(opts.body,undefined);assert.equal(opts.headers.TTL,'3600');return new Response(null,{status:410});});assert.deepEqual(r,{status:410,accepted:false,expired:true});
 });
 test('device id is stable and does not expose the endpoint',async()=>{assert.match(await deviceId(endpoint),/^[a-f0-9]{64}$/);assert.equal(await deviceId(endpoint),await deviceId(endpoint));assert.notEqual(await deviceId(endpoint),await deviceId(endpoint+'x'));});
