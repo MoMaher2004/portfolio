@@ -60,11 +60,15 @@ python3 scripts/portfolio_agent.py upload --file /path/to/screen.webp --project 
 | GET | `/api/admin/analytics?days=30` | D1 pageviews; 7, 30 or 90 days |
 | GET | `/api/admin/analytics/cloudflare` | Optional zone-level request metrics |
 | GET | `/api/admin/export?parts=database,media` | Full SQL backup, optionally with original R2 files in streamed TAR (omit `,media` for SQL only) |
+| GET | `/api/admin/push` | List device summaries and VAPID public configuration (private) |
+| POST | `/api/admin/push/subscribe` | Register a real browser subscription, optionally with preview encryption keys |
+| POST | `/api/admin/push/devices/:id/test` | Send a real test notification only with permission |
+| DELETE | `/api/admin/push/devices/:id` | Remove registered device only with permission |
 | GET | `/api/site-data` | Public published data |
 | GET | `/api/contact/options` | Country and dialing code options |
 | POST | `/api/contact` | Public contact form; do not send test messages without permission |
 
-Full API specification: `docs/API.md` (all routes, payloads, limits and response types). The Python CLI is a project/upload helper and **does not** expose commands for every API route. Use the documented HTTP contract directly for other operations; do not invent CLI commands. Collection APIs also support GET/PUT on list collections and GET/PUT/POST/DELETE on an individual item; read the schema first and preserve unknown fields. Do not run seed, bulk replacement or destructive actions without explicit permission.
+Architecture and code-maintenance reference: `README.md`. Full API specification: `docs/API.md` (routes, payloads, limits and response types). The Python CLI is a project/upload helper and **does not** expose commands for every API route. Use the documented HTTP contract directly for other operations; do not invent CLI commands. Collection APIs also support GET/PUT on list collections and GET/PUT/POST/DELETE on an individual item; read the schema first and preserve unknown fields. Do not run seed, bulk replacement or destructive actions without explicit permission.
 
 ### Media and backup rules
 
@@ -83,6 +87,7 @@ Full API specification: `docs/API.md` (all routes, payloads, limits and response
   "overview": "Short paragraph: what it does, audience, and scope.",
   "problem": "Challenge or real-world need.",
   "solution": "How the implementation addresses the challenge.",
+  "technicalDetails": "Verified implementation details.",
   "role": "Backend Development · AI Integration",
   "category": "Web / AI Platform",
   "tracks": ["Backend", "AI Integration", "Full-stack"],
@@ -106,7 +111,7 @@ Full API specification: `docs/API.md` (all routes, payloads, limits and response
 - **Highlights (`features`):** short list of actual features. The interface uses “Highlights” for this field.
 - **Featured:** boosts priority in the homepage's selected work. It does not independently publish the project; `published` controls public visibility.
 - **Cover (`coverMediaId`):** one uploaded **image's media ID** to show on homepage card; optional `mediaIds` are the project gallery. If no explicit cover, the first available gallery image is used; otherwise a neutral graphic, never project initials.
-- For Arabic, add `titleAr`, `summaryAr`, `overviewAr`, `problemAr`, `solutionAr`, `roleAr`, `featuresAr`; similarly `Es` suffix for Spanish. Never fabricate translations; untranslated fields fall back to English.
+- For Arabic, add `titleAr`, `categoryAr`, `summaryAr`, `overviewAr`, `problemAr`, `solutionAr`, `roleAr`, `technicalDetailsAr`, `featuresAr`; similarly `Es` suffix for Spanish. Never fabricate translations; untranslated fields fall back to English.
 - `links`: list of `{ "id": "...", "label": "GitHub", "url": "https://..." }`. Existing legacy `github` and `demo` fields are also supported.
 
 ## Example workflow — create a new project safely
@@ -129,3 +134,13 @@ Full API specification: `docs/API.md` (all routes, payloads, limits and response
 - `416`: invalid or unsatisfiable media byte range; check size using HEAD.
 - `429`: authorization or contact rate limit; stop requests rather than repeatedly retrying.
 - `500`: inspect Worker logs with the owner's permission; do not retry writes blindly.
+
+
+## Notification and code-maintenance boundaries
+
+- Read `docs/WEB_PUSH.md` and the actual handler contracts before touching notifications. Do not invent device endpoints or encryption keys: enrollment is a real browser permission and PushSubscription flow.
+- The device list intentionally omits raw endpoint and encryption secrets. Never export these for debugging. Do not rotate the VAPID key, send tests or remove subscriptions without explicit authorization.
+- Notification tests are external side effects; provider acceptance is not proof of device display. Contact writes can trigger notifications, so use a local isolated environment for automated testing.
+- Legacy subscriptions receive generic alerts; preview-capable devices use encrypted message previews. Preserve existing registrations and never introduce plaintext payload fallback.
+- Collection API writes internally read and replace the CMS snapshot. They remain subject to snapshot size/statement limits and concurrent-editor risks. Read current data and preserve all unknown fields.
+- For repository changes (as opposed to live content edits), follow the maintainer and AI-agent guide in README.md, inspect source/tests at the current ref, run checks, and do not push/deploy without authorization.

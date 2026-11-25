@@ -33,3 +33,6 @@ __pycache__/
 .dev.vars*
 *.pem
 *.key
+
+# Portfolio database backups
+portfolio_backup_*.json
