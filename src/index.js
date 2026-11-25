@@ -4,6 +4,7 @@ import { renderHtml, renderAdmin } from './render.js';
 import { defaults } from './defaults.js';
 import { findMediaReferences } from './media-usage.js';
 import { serveMedia } from './media-response.js';
+import { exportBackup } from './backup-export.js';
 
 const json = (value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...extra}});
 const error=(message,status=400)=>json({error:message},status);
@@ -138,6 +139,7 @@ async function main(req,env,ctx){
    await env.DB.prepare('DELETE FROM auth_attempts WHERE ip_hash=?').bind(key).run();
    if(path==='/api/admin/verify'&&req.method==='POST')return json({ok:true});
    if(path==='/api/admin/seed'&&req.method==='POST')return json({created:await seedOnce(env)});
+   if(path==='/api/admin/export'&&req.method==='GET')return exportBackup(env,url.searchParams.get('parts'));
    if(path==='/api/admin/state'&&req.method==='GET')return json(await readSite(env,{admin:true}));
    if(path==='/api/admin/state'&&req.method==='PUT') {await putState(env,await readBody(req));return json({ok:true})}
    if(path==='/api/admin/analytics'&&req.method==='GET')return json(await analytics(env,url.searchParams.get('days')||30));
