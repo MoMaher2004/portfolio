@@ -19,26 +19,36 @@ unset TOKEN
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/api/site-data` | no | Public, published portfolio data without private messages |
-| POST | `/api/contact` | no | Send a contact message (name/email/message, optional honeypot `website`) |
+| GET | `/api/contact/options` | no | `{country, callingCodes}`; country may be null; calling codes keyed by ISO country code |
+| POST | `/api/contact` | no | Send a contact message by email, WhatsApp or Telegram; see contact payload below |
 | POST | `/api/admin/verify` | yes | Test token; returns `{ "ok": true }` |
-| GET | `/api/admin/state` | yes | Entire editable CMS state, including drafts and messages |
-| PUT | `/api/admin/state` | yes | Update CMS snapshot, preserving media files in R2 |
+| GET | `/api/admin/state` | yes | Editable CMS state, including drafts and up to 250 inbox messages |
+| PUT | `/api/admin/state` | yes | Replace content/configuration snapshot; message entries only update read status; preserves R2 objects |
 | POST | `/api/admin/seed` | yes | Fill defaults only when the database is uninitialized |
 | GET | `/api/admin/collections/:collection` | yes | List documents in one collection |
 | PUT | `/api/admin/collections/:collection` | yes | Replace items in that collection with a JSON array |
-| GET | `/api/admin/collections/:collection/:id` | yes | Read one item |
-| PUT/POST | `/api/admin/collections/:collection/:id` | yes | Add or update an item (body `id` must match path) |
-| DELETE | `/api/admin/collections/:collection/:id` | yes | Remove item |
+| GET | `/api/admin/collections/:collection/:id` | yes | Read one item; missing item returns JSON null |
+| PUT/POST | `/api/admin/collections/:collection/:id` | yes | Add or replace an item (body `id` must match path) |
+| DELETE | `/api/admin/collections/:collection/:id` | yes | Remove CMS record only; never use to delete a binary media asset |
 | POST | `/api/admin/files?name=...` | yes | Raw binary upload; `Content-Type` and `Content-Length` required; max **90 MiB** |
-| DELETE | `/api/admin/files/:id` | yes | Delete an R2 asset and its metadata |
-| GET | `/media/:id` | no | Stream uploaded media via R2 |
-| PUT | `/api/admin/cv` | yes | Raw `application/pdf` upload; attaches CV download |
-| GET | `/cv` | no | Download CV PDF; 404 until attached |
-| GET | `/api/admin/messages` | yes | Contact messages |
-| PATCH | `/api/admin/messages/:id` | yes | `{ "read": true }` or `{ "read": false }` |
-| DELETE | `/api/admin/messages/:id` | yes | Delete message |
+| PATCH | `/api/admin/files/:id` | yes | Rename with JSON `{ "name": "new-name.webp" }`; original extension and ID preserved |
+| GET | `/api/admin/files/:id/references` | yes | `{id,used,references}`; includes draft references |
+| DELETE | `/api/admin/files/:id` | yes | Delete R2 asset and both metadata records; 409 if referenced |
+| GET/HEAD | `/media/:id` | no | Stream R2 media or read headers; GET supports single byte ranges (206/416) |
+| PUT | `/api/admin/portrait?name=...` | yes | Raw supported image; registers media and sets homepage portrait; returns media item (201) |
+| PUT | `/api/admin/cv` | yes | Raw `application/pdf` upload; sets legacy `settings.cvUrl` |
+| GET | `/cv` | no | Download legacy CV PDF; 404 until attached |
+| GET | `/cv/:id` | no | Download named PDF from `settings.cvs` by CV entry ID |
+| GET | `/api/admin/messages` | yes | Up to 250 newest contact messages, including archived and contact/device metadata |
+| PATCH | `/api/admin/messages/:id` | yes | JSON `read` and/or `archived` booleans |
+| DELETE | `/api/admin/messages/:id` | yes | Delete message and its detail/country records |
 | GET | `/api/admin/analytics?days=30` | yes | D1 pageviews grouped by UTC day, hour, country, full path. `days` accepts 7, 30 or 90 (defaults to 30). Not unique visitors; may include bots. |
 | GET | `/api/admin/analytics/cloudflare` | yes | Optional Cloudflare GraphQL daily zone HTTP request metrics |
+| GET | `/api/admin/export?parts=database,media` | yes | Full application database SQL export; optional streamed TAR including R2 media |
+| GET | `/` | no | Server-rendered homepage |
+| GET | `/projects/:slug` | no | Server-rendered published project; drafts are not publicly available |
+| GET | `/focus/:slug` | no | Active focused share page; inactive or missing link returns 404 |
+| GET | `/admin` | no | Admin shell, noindex; API authentication still required |
 | GET | `/sitemap.xml` | no | Sitemap for published project and focus URLs |
 | GET | `/robots.txt` | no | Robots directives |
 
@@ -81,14 +91,34 @@ curl -fsS -X POST 'https://YOUR_DOMAIN/api/contact' \
   --data '{"name":"Visitor","email":"visitor@example.org","message":"I would like to discuss a project."}'
 ```
 
-Successful uploads use HTTP `201`; unauthorized uses `401`; invalid requests use `400` or `415`; upload over-limit uses `413`; unrecognized routes use `404`; repeated wrong tokens and excessive contacts may use `429`.
+Successful uploads use HTTP `201`; unauthorized uses `401`; disallowed origins use `403`; invalid requests use `400` or `415`; missing upload length uses `411`; upload over-limit uses `413`; unrecognized routes use `404`; referenced media deletion uses `409`; unsatisfiable byte ranges use `416`; repeated wrong tokens and excessive contacts may use `429`.
+
+### Current API contracts
+
+**Media.** Supported upload MIME types: `image/png`, `image/jpeg`, `image/webp`, `image/gif`, `image/avif`, `video/mp4`, `video/webm`, `application/pdf`, `application/json`, `text/plain`. Send the raw file, not multipart or base64; use a known length and URL-encode the filename. The generic upload returns `{id,name,type,src,bytes}` and creates the R2 object plus its SQL record; register the returned item in the CMS `media` collection before attaching it. The portrait endpoint does this registration itself. Rename via PATCH, not collection replacement: the name is limited to 180 characters, cannot contain path separators/control characters, and must preserve the extension. The original `/media/:id` URL does not change. Image/video conversion, crop and scale are performed by Media Studio in the browser, not by an HTTP conversion endpoint. Edited copies use new media IDs.
+
+Before deleting media, read `/api/admin/files/:id/references`. If `used` is true, stop and report the references, including drafts. The delete route also checks references server-side and returns 409 if still used. Do not bypass it with collection deletion. Media URLs are public by ID, including assets attached to drafts; unpublished project text is protected, but an unlisted asset URL is not an authorization boundary. Never upload confidential assets assuming a draft makes them private.
+
+`HEAD /media/:id` returns metadata including `Content-Length` and `Accept-Ranges: bytes`. A valid single `Range: bytes=0-1023`, open-ended range or suffix range returns 206 with `Content-Range`; an invalid/unsatisfiable range returns 416. A full GET returns 200. `If-Range` may cause a full response if the ETag does not match. Native players can request the byte ranges needed for seeking; the browser controls buffering.
+
+**Contact and messages.** Contact JSON requires `name` (at least two characters), `message` (at least eight), and either `contactMethod: "email"` (default) with valid `email`, or `contactMethod: "whatsapp"` / `"telegram"` with valid `phone` and ISO `country` for local numbers. `website` is a honeypot. The inbox may contain private IP/contact information; do not export, disclose or delete it without authorization. PATCH accepts either or both boolean fields `read` and `archived`; omission of both is invalid.
+
+**CVs.** `PUT /api/admin/cv` is the legacy single-CV route. For named CVs, upload a PDF via the generic files API, register the returned media item, and update `settings.cvs` in a freshly fetched CMS snapshot with entries `{id,title,mediaId}` (preserve existing properties and entries). `/cv/:id` uses the entry ID, not the media ID.
+
+**Full SQL backup.** `GET /api/admin/export?parts=database` requires the admin bearer token and downloads a `.sql` file (`application/sql`). `parts=database,media` downloads a TAR containing `backup.sql` and registered original R2 files at their original `media/<uuid>.<ext>` keys. The old JSON selections are no longer accepted. The SQL is generated from the live SQLite schema, includes all application tables (including drafts, messages, message_details, message_countries, analytics, rate-limit records and migration records if present), explicit indexes, views, triggers, and autoincrement sequences. Cloudflare-managed `_cf_*` and SQLite internal metadata tables are excluded; Worker secrets and external Cloudflare analytics are not database rows. Table dependencies are read from foreign keys and parent tables/rows precede dependent ones where possible; checks are deferred for D1 import. Values are encoded by SQLite to preserve text, BLOBs and large integers. SQL is limited to 32 MiB; use Wrangler native D1 export for larger databases or unsupported virtual tables. D1 table reads are batched; schema changes during export cause failure, but D1 and R2 are not one atomic snapshot. Restore into a fresh SQLite/D1 database, not an existing populated one, and verify `PRAGMA foreign_key_check;`. SQL contains no explicit BEGIN/COMMIT for D1 compatibility. For local SQLite: `sqlite3 -bail restored.db < backup.sql`; for a new D1 database: `npx wrangler d1 execute NEW_DATABASE --remote --file=backup.sql`. Restore archived R2 files separately using their exact object keys and the recorded MIME types. No automatic restore endpoint exists. `Content-Disposition` and `X-Export-Bytes` identify the download; cache is private/no-store. Keep backups private: they include contact data and IP-related records.
+
+```bash
+curl --fail-with-body -H "Authorization: Bearer $TOKEN" \
+  'https://YOUR_DOMAIN/api/admin/export?parts=database,media' \
+  --output portfolio-backup.tar
+```
 
 ### Notes
 
 - After **each** admin update the browser sends the bearer token. Opening `/admin` without a token only renders the login form; it never authorizes APIs.
 - Changes made through the collection endpoints are visible after a full dashboard refresh/unlock.
-- State snapshot and collection endpoints validate required fields and IDs. The snapshot is limited to ~900 KB. Put all binary content in R2.
-- Media URLs identify immutable objects; replacing a photo means uploading a new media ID and updating its reference.
+- State snapshot and collection endpoints validate required fields and IDs. The serialized snapshot is limited to 900,000 characters; `putState` also rejects more than 220 batched statements. Collection writes currently call `putState` too, so they do not bypass this limit. Put all binary content in R2.
+- Media URLs identify immutable objects; replacing a photo means uploading a new media ID and updating its reference. The draft preview runs inside the authenticated admin page; there is no public draft preview endpoint.
 - D1 traffic metrics are *pageview events*, not unique people, sessions or time-on-page. They may include bot traffic. Country is based on Cloudflare geolocation. Time is in UTC, not Cairo. Cloudflare GraphQL zone HTTP request totals may include other traffic on the same domain.
 - API calls to protected endpoints from a different **browser origin** require setting `ALLOWED_ORIGINS` in `wrangler.jsonc` and redeploying. API tools/scripts normally send no browser Origin and do not require CORS.
 

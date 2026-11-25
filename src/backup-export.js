@@ -1,20 +1,20 @@
 // Read-only, authenticated export. No R2 object is loaded fully into Worker memory.
+import {buildSqlBackup} from './sql-backup.js';
 const encoder=new TextEncoder();
 const BLOCK=512;
-const flags=new Set(['content','media','messages','analytics']);
+const flags=new Set(['database','media']);
 const padded=n=>Math.ceil(n/BLOCK)*BLOCK;
-const jsonBytes=value=>encoder.encode(JSON.stringify(value,null,2)+'\n');
 const archiveSize=(size)=>BLOCK+padded(size);
 const validSize=n=>Number.isSafeInteger(n)&&n>=0&&n<=0o77777777777;
 
 export function parseExportParts(value){
  const parts=new Set(String(value||'').split(',').filter(Boolean));
- if(!parts.size||[...parts].some(p=>!flags.has(p)))throw Error('Select at least one valid export category.');
+ if(!parts.has('database')||[...parts].some(p=>!flags.has(p)))throw Error('Select database, optionally with media (parts=database,media).');
  return parts;
 }
 
 function mediaEntry(row){
- // Keep original object IDs/extensions; original display names live in backup.json.
+ // Keep original object IDs/extensions; original display names live in backup.sql.
  // Never place an arbitrary user-controlled filename or path in a TAR header.
  const id=String(row.id||''),key=String(row.object_key||'');
  if(!/^[0-9a-f-]{36}$/i.test(id)||!key.startsWith('media/'+id+'.')||!/^media\/[0-9a-f-]{36}\.[a-z0-9]{1,12}$/i.test(key))throw Error('Invalid stored media path: '+id);
@@ -34,7 +34,7 @@ export function tarHeader(path,size,mtime){
 }
 
 export async function* tarChunks(env,manifest,files,mtime){
- yield tarHeader('backup.json',manifest.byteLength,mtime);yield manifest;
+ yield tarHeader('backup.sql',manifest.byteLength,mtime);yield manifest;
  if(padded(manifest.byteLength)>manifest.byteLength)yield new Uint8Array(padded(manifest.byteLength)-manifest.byteLength);
  for(const file of files){
   const object=await env.FILES.get(file.object_key);
@@ -56,20 +56,13 @@ function streamIterator(iterator){
 
 export async function exportBackup(env,query){
  let parts;try{parts=parseExportParts(query);}catch(e){return new Response(JSON.stringify({error:e.message}),{status:400,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});}
- const tables={};const rows=async sql=>(await env.DB.prepare(sql).all()).results||[];
- if(parts.has('content')){
-  tables.content_items=await rows('SELECT * FROM content_items ORDER BY collection,position');
-  tables.configuration=await rows('SELECT * FROM configuration ORDER BY name');
- }else if(parts.has('media'))tables.content_items=await rows("SELECT * FROM content_items WHERE collection='media' ORDER BY position");
- if(parts.has('content')||parts.has('media'))tables.media_files=await rows('SELECT * FROM media_files ORDER BY id');
- if(parts.has('messages'))tables.messages=await rows('SELECT * FROM messages ORDER BY id');
- if(parts.has('analytics'))tables.visit_hours=await rows('SELECT * FROM visit_hours ORDER BY date,hour,country,path');
- const files=parts.has('media')?tables.media_files.map(mediaEntry):[];
+ const isTar=parts.has('media');
+ const {sql:manifest,media}=await buildSqlBackup(env.DB,{mediaIncluded:isTar});
+ const files=media.map(mediaEntry);
  const now=new Date(),stamp=now.toISOString().replace(/[:.]/g,'-');
- const manifest=jsonBytes({format:'portfolio-backup',version:1,exportedAt:now.toISOString(),included:[...parts],mediaIncluded:parts.has('media'),tables,media:files.map(({id,name,mime_type,bytes,archive_path})=>({id,name,mime_type,bytes,archive_path}))});
- const isTar=parts.has('media');const size=isTar?archiveSize(manifest.byteLength)+files.reduce((n,f)=>n+archiveSize(f.bytes),0)+2*BLOCK:manifest.byteLength;
+ const size=isTar?archiveSize(manifest.byteLength)+files.reduce((n,f)=>n+archiveSize(f.bytes),0)+2*BLOCK:manifest.byteLength;
  if(!Number.isSafeInteger(size))throw Error('Backup exceeds safe archive size');
- const headers={'Content-Type':isTar?'application/x-tar':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="portfolio-backup-${stamp}.${isTar?'tar':'json'}"`,'Cache-Control':'private, no-store','X-Export-Bytes':String(size),'X-Content-Type-Options':'nosniff'};
+ const headers={'Content-Type':isTar?'application/x-tar':'application/sql; charset=utf-8','Content-Disposition':`attachment; filename="portfolio-backup-${stamp}.${isTar?'tar':'sql'}"`,'Cache-Control':'private, no-store','X-Export-Bytes':String(size),'X-Content-Type-Options':'nosniff'};
  if(!isTar)return new Response(manifest,{headers});
  return new Response(streamIterator(tarChunks(env,manifest,files,Math.floor(now.getTime()/1000))),{headers});
 }

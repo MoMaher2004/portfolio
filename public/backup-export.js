@@ -6,8 +6,8 @@ function download(blob,filename){const url=URL.createObjectURL(blob),a=node('a')
 export async function openBackupExport({getToken,flush}){
  if(active)return;active=true;
  const dialog=node('dialog',null,'dialog');dialog.style.margin='auto';dialog.style.maxHeight='90vh';dialog.setAttribute('aria-label','Export portfolio backup');
- const title=node('h2','Export portfolio backup'),desc=node('p','Select the data you want to download. JSON without media; TAR archive with media. This does not change or delete anything.','sub small');
- const fields=node('div',null,'field');const choices=[['content','Portfolio data and settings (including drafts and media metadata)',true],['media','Media files (images, videos, PDFs and other R2 files)',false],['messages','Inbox messages (private contact information)',false],['analytics','Stored visitor analytics',false]];
+ const title=node('h2','Export portfolio backup'),desc=node('p','All application database tables, schema, indexes and rows are exported to SQL. Optionally include original R2 media in a TAR archive. Nothing is changed or deleted.','sub small');
+ const fields=node('div',null,'field');fields.append(node('p','Included: full database (drafts, settings, inbox, analytics, media metadata and other application tables).','small'));const choices=[['media','Include original media files from R2 (optional)',false]];
  const inputs=choices.map(([value,label,checked])=>{const row=node('label',null,'inline-checkbox'),input=node('input');input.type='checkbox';input.value=value;input.checked=checked;row.append(input,document.createTextNode(label));fields.append(row);return input;});
  const status=node('p','Keep this backup private. Large exports stream directly to disk on compatible browsers.','sub small');status.setAttribute('aria-live','polite');status.style.overflowWrap='anywhere';
  const progress=node('progress');progress.max=1;progress.value=0;progress.style.width='100%';progress.hidden=true;
@@ -17,15 +17,15 @@ export async function openBackupExport({getToken,flush}){
  close.addEventListener('click',finish);dialog.addEventListener('cancel',e=>{e.preventDefault();finish();});dialog.addEventListener('keydown',e=>e.stopPropagation());
  const done=new Promise(resolve=>dialog.addEventListener('close',resolve,{once:true}));
  start.addEventListener('click',async()=>{
-  if(busy)return;const parts=inputs.filter(i=>i.checked).map(i=>i.value);if(!parts.length){status.textContent='Select at least one category.';return;}
+  if(busy)return;const parts=['database',...inputs.filter(i=>i.checked).map(i=>i.value)];
   const token=getToken();if(!token){status.textContent='Unlock the dashboard first.';return;}
-  const isTar=parts.includes('media'),ext=isTar?'tar':'json',filename=`portfolio-backup-${new Date().toISOString().replace(/[:.]/g,'-')}.${ext}`;
+  const isTar=parts.includes('media'),ext=isTar?'tar':'sql',filename=`portfolio-backup-${new Date().toISOString().replace(/[:.]/g,'-')}.${ext}`;
   busy=true;controller=new AbortController();start.disabled=true;inputs.forEach(i=>i.disabled=true);close.textContent='Cancel';progress.hidden=false;progress.value=0;let writer,reader,committed=false;
   try{
    // Pick a destination synchronously from the user click, before any network await.
    let handle=null;
    if(typeof window.showSaveFilePicker==='function'){
-    try{handle=await window.showSaveFilePicker({suggestedName:filename,types:[{description:isTar?'TAR backup':'JSON backup',accept:{[isTar?'application/x-tar':'application/json']:['.'+ext]}}]});}
+    try{handle=await window.showSaveFilePicker({suggestedName:filename,types:[{description:isTar?'TAR backup':'SQL backup',accept:{[isTar?'application/x-tar':'application/sql']:['.'+ext]}}]});}
     catch(e){if(e.name==='AbortError')throw e;if(!['SecurityError','NotAllowedError','TypeError'].includes(e.name))throw e;}
    }
    if(getToken()!==token||controller.signal.aborted)throw new DOMException('Export cancelled','AbortError');
@@ -39,7 +39,7 @@ export async function openBackupExport({getToken,flush}){
    while(true){if(controller.signal.aborted||getToken()!==token)throw new DOMException('Export cancelled','AbortError');const {done,value}=await reader.read();if(done)break;count+=value.byteLength;if(count>total)throw Error('Export size changed unexpectedly. Retry.');if(writer)await writer.write(value);else chunks.push(value);progress.value=count/total;status.textContent=`Downloading ${formatBytes(count)} / ${formatBytes(total)} · ${Math.floor(count/total*100)}%`;}
    if(count!==total)throw Error('Incomplete backup. Retry the export.');
    if(controller.signal.aborted||getToken()!==token)throw new DOMException('Export cancelled','AbortError');
-   if(writer)await writer.close();else download(new Blob(chunks,{type:isTar?'application/x-tar':'application/json'}),filename);
+   if(writer)await writer.close();else download(new Blob(chunks,{type:isTar?'application/x-tar':'application/sql'}),filename);
    committed=true;status.textContent=`Backup downloaded · ${formatBytes(count)}. Store it securely.`;progress.value=1;
   }catch(e){status.textContent=e.name==='AbortError'?'Export cancelled.':`Export failed: ${e.message||String(e)}`;progress.value=0;}
   finally{if(!committed){controller.abort();if(writer)await writer.abort().catch(()=>{});if(reader)await reader.cancel().catch(()=>{});}reader?.releaseLock();controller=null;busy=false;start.disabled=false;inputs.forEach(i=>i.disabled=false);close.textContent='Close';}

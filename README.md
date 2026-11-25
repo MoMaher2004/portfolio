@@ -12,7 +12,9 @@ cd maher-portfolio-cloudflare
 bash scripts/deploy.sh YOUR_DOMAIN.com
 ```
 
-The script signs in to Cloudflare via Wrangler (a browser window may open), checks/creates `maher-portfolio-db` and `maher-portfolio-media`, updates `wrangler.jsonc`, applies remote migrations, deploys Worker + Static Assets, creates a cryptographically random **32-byte** admin token (43-character base64url representation), and writes it to `.secrets/admin-token.txt` with mode `0600`. It installs the token as a Worker secret and prints it for you. Run the script again to update code; content is **not** reset.
+The script signs in to Cloudflare via Wrangler (a browser window may open), checks/creates `maher-portfolio-db` and `maher-portfolio-media`, updates `wrangler.jsonc`, applies remote migrations, deploys Worker + Static Assets, creates a cryptographically random **32-byte** admin token (43-character base64url representation), and writes it to `.secrets/admin-token.txt` with mode `0600`. It installs the token as a Worker secret and prints it for you. This is **initial setup**, not the routine update workflow; rerunning it can replace the admin secret.
+
+For the existing GitHub-connected deployment, run checks locally, commit only intended changes, then push to `main` to trigger Cloudflare's build/deployment. Do not rerun the setup script or manually deploy for ordinary code updates. Verify the build result before assuming production has changed.
 
 When your domain is already an **active Cloudflare zone**, Wrangler can bind the custom domain automatically, including DNS and TLS. If its nameservers are still set at your registrar, change them at the registrar first; the script **cannot** change registrar-side nameservers automatically. You do not need to share DNS1/DNS2 or any API keys in ChatGPT.
 
@@ -23,11 +25,12 @@ If you don't want a custom domain yet, run `bash scripts/deploy.sh` and leave th
 - Public site: `https://YOUR_DOMAIN/`
 - CMS: `https://YOUR_DOMAIN/admin`
 - Paste your token into the login field. It lives **only in JavaScript memory**; reloading the page logs you out.
-- Dashboard → Projects: create your projects and choose any combination of categories/tracks.
-- Dashboard → Media Library: upload photos and videos; select media in each project's editor.
+- Dashboard → Projects: create projects, choose tracks, and preview saved drafts within the authenticated admin session without publishing.
+- Dashboard → Media Library: upload photos/videos, optionally convert, crop and scale locally, choose names/prefixes, rename existing media, edit as a new copy and browse paginated results. Referenced files cannot be deleted until detached.
 - Dashboard → Homepage: change text and upload portrait or leave the gradient without an image.
-- Dashboard → Settings: upload a logo, favicon and your CV PDF, set professional identity/default project filter and enable Spanish when ready.
+- Dashboard → Settings: upload a logo, favicon and CV PDFs, set professional identity/default project filter and enable Spanish when ready.
 - Dashboard → Visitor Analytics: charts and tables from D1 (7/30/90 days); optional Cloudflare GraphQL remains an independent API.
+- Dashboard → Export / Backup: download the full application database as SQL (schema and data), optionally with original registered R2 media in a TAR archive. See `docs/API.md` for scope and restore instructions.
 
 There are **no sample projects, fake messages, fabricated testimonials, demo offers or placeholder personal photos** in the database. Default skills/tools (Node.js, Express, PHP, TypeScript, databases, Python, React, Linux, Docker, Git, IoT and others) are provided as editable initial data. Check/adjust the list and homepage biography before sharing publicly.
 
@@ -93,16 +96,16 @@ npx wrangler dev
 
 ### Backups and further configuration
 
-- Backup D1: `npx wrangler d1 export maher-portfolio-db --remote --output backup.sql` (verify current Wrangler syntax).
-- Media files stay in R2, so back those up separately.
+- Use **Export / Backup** for full application database SQL downloads (`GET /api/admin/export?parts=database`); add `,media` for a streamed TAR containing `backup.sql` and original registered R2 objects. The SQL includes all application tables, indexes, views and triggers, including message details and country data. SQL is limited to 32 MiB; browser fallback downloads are limited to 64 MiB without direct-to-disk support. Keep exports private. No automatic restore endpoint exists.
+- Restore SQL into a new SQLite/D1 database; use `PRAGMA foreign_key_check;` to verify references. Restore archived files separately to R2 at their original object keys. For larger or unsupported databases use `npx wrangler d1 export maher-portfolio-db --remote --output backup.sql` and back up R2 separately. Worker secrets and Cloudflare internal metadata are not included.
 - Changing the admin token: replace `.secrets/admin-token.txt` securely and run `printf '%s' "$(cat .secrets/admin-token.txt)" | npx wrangler secret put ADMIN_TOKEN`; do **not** commit secrets.
 - To activate Cloudflare zone analytics in the dashboard, add `CLOUDFLARE_ZONE_ID` to `vars` in `wrangler.jsonc` and set `CF_ANALYTICS_TOKEN` using `npx wrangler secret put CF_ANALYTICS_TOKEN` with **read-only Zone Analytics permissions**. The token is optional. GraphQL data is zone-level requests, not unique portfolio visitors.
-- To whitelist local browser dashboards, change `vars.ALLOWED_ORIGINS` in Wrangler config and redeploy; other apps using curl or fetch server-side don't require CORS configuration.
-- Static demos: add your HTML/CSS/JS under `public/demos/my-demo/index.html`, run `npx wrangler deploy`, link to `/demos/my-demo/` from the project.
+- To whitelist local browser dashboards, change `vars.ALLOWED_ORIGINS` in Wrangler config and deploy through the configured GitHub workflow; other apps using curl or fetch server-side don't require CORS configuration.
+- Static demos: add your HTML/CSS/JS under `public/demos/my-demo/index.html`, run the checks and push the intended changes to `main`; link to `/demos/my-demo/` from the project after deployment.
 
 ## Limits, prerequisites, and caveats
 
-This is an **initial production implementation**, not proof that a live Cloudflare deployment is already running. The execution environment used to assemble it could not install Wrangler because npm registry access timed out; you must run `scripts/deploy.sh` from a machine with Cloudflare credentials/network access and test the deployed site before public launch.
+The repository describes the implementation, not the current deployment status. Check Cloudflare's build result and test the deployed site before public launch. The admin token is not required to inspect public pages. Public R2 media URLs are accessible by ID; draft status does not make their assets private.
 
 The admin is optimized for a **single editor**. Simultaneous editing by multiple administrators could overwrite an earlier snapshot; add version checks if you later need multi-user editing. Pageview totals are not unique users, and there is no detailed session duration tracking. The Worker account free tier has usage quotas and 10ms CPU/request; test latency after publishing several projects. Raw uploads must provide a known Content-Length for streaming directly into R2. If a proxy or client sends chunked data without a known length, use a client that sets the file size or implement signed direct uploads. Project videos should be MP4/WebM compatible with browsers. Static demos are deployed with the Worker, not uploaded through the CMS.
 
@@ -125,11 +128,11 @@ Open `/admin`, unlock using your admin token, then select **Visitor Analytics** 
 
 The existing `visit_hours` D1 table powers the dashboard; **no schema migration or Cloudflare GraphQL token is required**. New traffic records preserve full project `/projects/<slug>` and focus `/focus/<slug>` paths. Previous aggregated records such as `/projects/:slug` are preserved but cannot be broken down retroactively. Cloudflare zone-wide GraphQL metrics remain optional under `/api/admin/analytics/cloudflare` (they are broader HTTP counts and should not be mixed into these pageview KPIs).
 
-Re-deploy existing site after replacing project code: `npx wrangler deploy`. No need to recreate D1, R2 or change the admin token. Keep your existing local `wrangler.jsonc` and secrets when updating from the ZIP: this archive contains generic project configuration and should not overwrite the live site's environment-specific IDs.
+Routine code updates use the GitHub-connected `main` deployment. Preserve the existing D1/R2 configuration and Worker secrets.
 
-## V7 update: project covers, clearer editor and agent skill
+## Project covers, clearer editor and agent skill
 
-**Update an existing deployment without resetting any D1/R2 data:** obtain `maher-portfolio-v7-update.zip`, extract it into your current portfolio folder, and run `bash portfolio-v7-update/install.sh`. The updater backs up overwritten code locally, runs checks and deploys the Worker using your unchanged `wrangler.jsonc`. Existing admin secrets, DNS settings, D1 records and R2 media are untouched. There is **no migration** for V7.
+These features are part of the repository; no legacy ZIP updater is needed.
 
 - Project form: upload a cover image directly or choose a Media Library image; `coverMediaId` is stored with the project in D1. Public homepage cards and SSR use it. No more automatic project-name initials; missing images render an abstract fallback.
 - Multiple specializations: choose any number of existing `tracks` and add new ones (comma separated). This already used a JSON array in D1; the editor now makes it obvious.
@@ -137,6 +140,6 @@ Re-deploy existing site after replacing project code: `npx wrangler deploy`. No 
 - The form explains **Summary, Overview, Challenge, Approach, Highlights**, and Featured. “Highlights” matches the public heading; content lives in `features` for backward compatibility.
 - Project media viewer and thumbnails no longer display video filenames/types, and the old CMS upload caption was removed. Native video controls remain.
 - `/favicon.png` is a blue/white logo generated in Python; an uploaded brand favicon overrides it. No AI-generated image.
-- **Agent skill:** `skills/portfolio-cms/SKILL.md`. Companion CLI: `scripts/portfolio_agent.py` (Python standard library, defaults to your HTTPS domain, reads admin token securely). Use it when granting an authorized coding agent access to your CMS.
+- **Agent skill:** `skills/portfolio-cms/SKILL.md`. Companion CLI: `scripts/portfolio_agent.py` (Python standard library, defaults to your HTTPS domain, reads admin token securely). Use it when granting an authorized coding agent access to your CMS. The CLI implements a subset of the API, not every endpoint.
 
-See `docs/API.md` for the complete endpoint and field descriptions. Use `npx wrangler deploy` to redeploy code; you do not need to rerun the initial D1 creation or seeding script.
+See `docs/API.md` for the current endpoint contracts, including export, rename, media references, range requests, portrait, multiple CVs and inbox archive actions. `src/index.js` and its imported handlers are the source of truth. Update the API documentation and agent skill whenever a route or its contract changes.

@@ -45,12 +45,32 @@ python3 scripts/portfolio_agent.py upload --file /path/to/screen.webp --project 
 | DELETE | `/api/admin/collections/projects/:id` | Delete one project (requires explicit permission) |
 | POST | `/api/admin/files?name=cover.webp` | Raw binary upload to R2; set `Content-Type` and known `Content-Length` |
 | PUT | `/api/admin/collections/media/:id` | Register uploaded media item with `{id,name,type,src,bytes}` |
-| GET | `/api/admin/state` | All CMS state including settings / translations (sensitive, admin only) |
-| PUT | `/api/admin/state` | Replace entire CMS state — avoid unless absolutely necessary |
-| GET | `/api/admin/analytics?days=30` | D1 pageviews |
+| PATCH | `/api/admin/files/:id` | Rename with `{ "name": "new-name.webp" }`; keep extension, ID and URL |
+| GET | `/api/admin/files/:id/references` | Check references (including drafts) before deletion |
+| DELETE | `/api/admin/files/:id` | Delete unreferenced media only, with explicit permission; 409 if in use |
+| GET/HEAD | `/media/:id` | Public media or metadata; GET accepts a single byte range |
+| PUT | `/api/admin/portrait?name=portrait.webp` | Upload supported image, register it and set homepage portrait |
+| PUT | `/api/admin/cv` | Upload PDF and set legacy CV link |
+| GET | `/cv` or `/cv/:id` | Download legacy or named CV; named ID is a CV entry ID |
+| GET | `/api/admin/state` | CMS state including settings / translations and up to 250 messages (sensitive) |
+| PUT | `/api/admin/state` | Replace content/config snapshot; avoid unless necessary; message read flags only |
+| GET | `/api/admin/messages` | Read up to 250 newest inbox messages, including archived items (private) |
+| PATCH | `/api/admin/messages/:id` | Set `read` and/or `archived` booleans |
+| DELETE | `/api/admin/messages/:id` | Delete message and details; requires explicit permission |
+| GET | `/api/admin/analytics?days=30` | D1 pageviews; 7, 30 or 90 days |
+| GET | `/api/admin/analytics/cloudflare` | Optional zone-level request metrics |
+| GET | `/api/admin/export?parts=database,media` | Full SQL backup, optionally with original R2 files in streamed TAR (omit `,media` for SQL only) |
 | GET | `/api/site-data` | Public published data |
+| GET | `/api/contact/options` | Country and dialing code options |
+| POST | `/api/contact` | Public contact form; do not send test messages without permission |
 
-Full API specification: `docs/API.md`.
+Full API specification: `docs/API.md` (all routes, payloads, limits and response types). The Python CLI is a project/upload helper and **does not** expose commands for every API route. Use the documented HTTP contract directly for other operations; do not invent CLI commands. Collection APIs also support GET/PUT on list collections and GET/PUT/POST/DELETE on an individual item; read the schema first and preserve unknown fields. Do not run seed, bulk replacement or destructive actions without explicit permission.
+
+### Media and backup rules
+
+- A draft preview is available inside the authenticated admin UI only; no public draft URL or preview API exists. Draft media bytes can still be retrieved by public media ID. Do not treat unlisted URLs as private storage.
+- Generic upload is a two-step operation (binary upload, then register the returned media object). Rename through PATCH; do not use collection DELETE to remove R2 files. Read the references endpoint and stop if used; never detach projects without approval. Conversion is browser-local, not a server API; editing a copy creates a new ID. Preserve old files and references unless the user explicitly requests otherwise.
+- Export is read-only, but the full database contains private inbox/contact and IP-related records. Obtain authorization before exporting. Use `parts=database` for SQL or `parts=database,media` for a TAR containing `backup.sql` and original R2 files. Old JSON part selections are no longer supported. Use a streaming binary download, not the helper’s JSON-only client; verify `X-Export-Bytes`, store securely, and never commit the backup. Restore only to a fresh database with explicit permission, verify foreign keys, and restore media separately to the same object keys. See `docs/API.md` for limits and exclusions.
 
 ## Project schema — important distinctions
 
@@ -102,8 +122,10 @@ Full API specification: `docs/API.md`.
 ## Errors & diagnostics
 
 - `401`: missing/invalid admin token; don't expose it in debug output.
+- `409`: media still referenced; inspect references and do not bypass the guard.
 - `411`: upload request is missing the file Content-Length. Python helper sends known size automatically.
 - `413`: file exceeds 90 MiB.
-- `415`: unsupported content type; convert to PNG/JPEG/WebP/AVIF/GIF, MP4/WebM, PDF or JSON as appropriate.
+- `415`: unsupported content type; convert to PNG/JPEG/WebP/AVIF/GIF, MP4/WebM, PDF, JSON or plain text as appropriate.
+- `416`: invalid or unsatisfiable media byte range; check size using HEAD.
 - `429`: authorization or contact rate limit; stop requests rather than repeatedly retrying.
 - `500`: inspect Worker logs with the owner's permission; do not retry writes blindly.
