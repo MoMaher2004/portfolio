@@ -433,3 +433,94 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Tahoma,s
 .media-actions-panel button{display:block;width:100%;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);text-align:start;font:inherit;cursor:pointer;white-space:nowrap}
 .media-actions-panel button:hover,.media-actions-panel button:focus-visible{background:var(--bg2);color:var(--accent)}
 .media-actions-panel button.danger{color:var(--danger)}
+
+/* Responsive layout guardrails. Keep the document at its actual viewport width;
+   allow intentional scrolling within tables, carousels and media viewers. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{min-width:0}
+#app{width:100%;min-width:0;max-width:100%;overflow-x:clip}
+.wrap,.public-header,.public-site,.login-wrap,.dashboard,.dash-main{min-width:0;max-width:100%}
+.public-header .brand,.public-header .brand>span,.public-header .nav-actions,
+.hero>*,.cards>*,.about-layout>*,.about-grid>*,.contact-slab>*,
+.detail-meta>*,.detail-two>*,.project-showcase,.showcase-display>*,
+.dashboard .dash-sidebar,.dashboard .dash-main,.dashboard .panel,
+.dashboard .field,.dashboard .table-scroll,.dashboard .stat-card,
+.dashboard .media-grid>*,.dashboard .admin-editor>*,.dashboard .form-grid>*,
+.dialog,.dialog .field,.dialog .form-grid>*{min-width:0}
+.public-site h1,.public-site h2,.public-site h3,.public-site p,
+.public-site .meta-item b,.public-site .tag-chip,.public-header .brand-name,
+.public-header .brand-sub,.site-footer,.dashboard .panel,.dashboard .breadcrumbs,
+.dashboard .dash-heading,.login-card,.dialog{overflow-wrap:anywhere}
+.public-site img,.public-site video,.dashboard img,.dashboard video{max-width:100%}
+.dashboard .table-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.dashboard .table-scroll .table{overflow-wrap:normal}
+.dashboard .field input:not([type=checkbox]):not([type=radio]),
+.dashboard .field textarea,.dashboard .field select,
+.dialog .field input:not([type=checkbox]):not([type=radio]),
+.dialog .field textarea,.dialog .field select,.login-card input{min-width:0;max-width:100%}
+.login-wrap{width:100%;min-height:100vh;min-height:100dvh;grid-template-columns:minmax(0,1fr);padding:clamp(14px,5vw,32px)}
+.login-card{width:min(420px,100%);min-width:0;max-width:100%;padding:clamp(22px,6vw,38px)}
+.login-card .btn{max-width:100%;white-space:normal;text-align:center}
+
+@media(max-width:1050px){
+ .public-header .site-nav{gap:12px}
+ .public-header .brand>span:last-child{min-width:0}
+ .dashboard .stats-grid,.dashboard .analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .dashboard .analytics-columns,.dashboard .admin-editor{grid-template-columns:minmax(0,1fr)}
+ .dashboard .media-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:900px){
+ .public-header .site-nav{height:auto;min-height:72px;flex-wrap:wrap;padding-block:12px}
+ .public-header .nav-links{display:none}
+ .public-header .nav-actions{flex-wrap:wrap;justify-content:flex-end}
+ .hero,.about-layout,.contact-slab{grid-template-columns:minmax(0,1fr)}
+ .hero{min-height:0}
+}
+@media(max-width:760px){
+ .wrap{width:calc(100% - 32px)}
+ .hero,.cards,.about-grid,.about-layout,.contact-slab,.detail-two,.showcase-display{grid-template-columns:minmax(0,1fr)}
+ .hero{min-height:0}
+ .detail-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .dashboard{grid-template-columns:minmax(0,1fr)}
+ .dashboard .dash-main{width:100%;min-width:0;padding-inline:14px}
+ .dashboard .dash-top,.dashboard .dash-heading,.dashboard .account{min-width:0;flex-wrap:wrap}
+ .dashboard .stats-grid,.dashboard .media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .dashboard .form-grid,.dialog .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .dashboard .btn,.dialog .btn,.public-site .hero-ctas .btn{max-width:100%;white-space:normal;text-align:center}
+ .dashboard .analytics-line-box,.dashboard .analytics-panel{min-width:0;max-width:100%}
+ .public-site .field input:not([type=checkbox]):not([type=radio]),
+ .public-site .field textarea,.public-site .field select,.login-card input{font-size:16px}
+ .overlay{grid-template-columns:minmax(0,1fr);padding:12px}
+ .dialog{max-width:100%;max-height:calc(100dvh - 24px)}
+}
+@media(max-width:480px){
+ .wrap{width:calc(100% - 24px)}
+ .public-header .site-nav{gap:8px;padding-block:10px}
+ .public-header .brand{flex:1 1 150px;gap:8px}
+ .public-header .nav-actions{flex:0 1 auto;gap:6px;justify-content:flex-start}
+ .public-header .brand-sub{display:none!important}
+ .public-header .languages{flex-wrap:wrap;max-width:100%}
+ .public-header .nav-actions .btn{white-space:normal}
+ .hero h1,.detail-hero h1{font-size:clamp(30px,10vw,43px);letter-spacing:-1.5px;line-height:1.12}
+ .section-title{font-size:clamp(27px,8vw,34px)}
+ .contact-slab{padding:clamp(15px,5vw,24px)}
+ .detail-meta{gap:10px}
+ .login-card h1{font-size:clamp(25px,8vw,31px)}
+ .login-card p,.login-card .tip{font-size:14px;line-height:1.55}
+ .login-card input,.login-card .btn{min-height:46px}
+ .dashboard .form-grid,.dialog .form-grid,.dashboard .portrait-admin,
+ .dashboard .skill-admin-grid,.dashboard .brand-admin-grid{grid-template-columns:minmax(0,1fr)}
+ .dashboard .panel{padding:13px}
+ .dashboard .stat-card strong{font-size:clamp(22px,7vw,29px)}
+ .dashboard .dash-heading h1{font-size:clamp(26px,8vw,34px)}
+ .dashboard .dash-top .account{gap:8px}
+ .dashboard .analytics-kpis{gap:8px}
+ .dialog{padding:16px}
+ .dialog .check-row{flex-wrap:wrap;gap:10px}
+}
+@media(max-width:340px){
+ .dashboard .stats-grid,.dashboard .analytics-kpis,.dashboard .media-grid,
+ .detail-meta{grid-template-columns:minmax(0,1fr)}
+ .public-header .nav-actions{width:100%;justify-content:space-between}
+ .login-card{padding:20px}
+}
