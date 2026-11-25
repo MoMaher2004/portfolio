@@ -3,6 +3,7 @@ import { readSite, seedOnce, putState, arrays, configs, listCollection, replaceC
 import { renderHtml, renderAdmin } from './render.js';
 import { defaults } from './defaults.js';
 import { findMediaReferences } from './media-usage.js';
+import { serveMedia } from './media-response.js';
 
 const json = (value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...extra}});
 const error=(message,status=400)=>json({error:message},status);
@@ -266,19 +267,9 @@ async function main(req,env,ctx){
    ]);
    return json({ok:true},201);
  }
- if(/^\/media\/[0-9a-f-]{36}$/.test(path)&&req.method==='GET'){
+ if(/^\/media\/[0-9a-f-]{36}$/.test(path)&&['GET','HEAD'].includes(req.method)){
    const id=path.slice('/media/'.length),row=await env.DB.prepare('SELECT object_key,mime_type FROM media_files WHERE id=?').bind(id).first();if(!row)return error('Not found',404);
-   const hasRange=req.headers.has('Range');
-   const file=await env.FILES.get(row.object_key,hasRange?{range:req.headers}:{});if(!file)return error('Not found',404);
-   const headers={'Content-Type':row.mime_type,'Cache-Control':row.mime_type==='application/pdf'?'public, max-age=3600':'public, max-age=31536000, immutable','Accept-Ranges':'bytes'};
-   if(row.mime_type==='application/pdf')headers['Content-Disposition']='inline';
-   const r=file.range;
-   if(hasRange&&r&&typeof r.offset==='number'&&typeof r.length==='number'){
-     headers['Content-Range']=`bytes ${r.offset}-${r.offset+r.length-1}/${file.size}`;
-     headers['Content-Length']=String(r.length);
-     return new Response(file.body,{status:206,headers});
-   }
-   return new Response(file.body,{headers});
+   return serveMedia(req,env.FILES,row);
  }
  if(/^\/cv\/[-_a-zA-Z0-9]{1,120}$/.test(path)&&req.method==='GET'){
    const id=path.split('/').at(-1);

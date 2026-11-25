@@ -275,7 +275,7 @@ function home(){
 function getProject(id){return db.projects.find(p=>p.id===id)}
 function currentGallery(p){const g=(p.gallery||[]).slice();const ids=[p.coverMediaId,...(p.mediaIds||[])].filter((id,i,all)=>id&&all.indexOf(id)===i);for(const id of ids){const m=db.media.find(x=>x.id===id);if(m){g.push({kind:m.type.startsWith('video')?'video':'image',src:transientVideos.get(id)||m.src||'',label:m.name,alt:mediaAlt(m,loc(p,'title')+' screenshot '+(g.length+1))});}}return g}
 function galleryFrame(p,g,thumb=false){
- if(g.kind==='video'&&g.src)return `<div class="gallery-media ${thumb?'thumb':'primary'}">${thumb?videoThumbnail(g.src,true):`<video class="video-stage" src="${esc(videoPreviewSource(g.src))}" controls playsinline preload="auto"></video>`}</div>`;
+ if(g.kind==='video'&&g.src)return `<div class="gallery-media ${thumb?'thumb':'primary'}">${thumb?videoThumbnail(g.src,true):`<video class="video-stage" src="${esc(g.src)}" controls playsinline preload="metadata"></video>`}</div>`;
  if(g.kind==='image'&&g.src)return `<div class="gallery-media ${thumb?'thumb':'primary'}"><img src="${esc(g.src)}" alt="${esc(thumb?'':(g.alt||loc(p,'title')))}" decoding="async" loading="${thumb?'lazy':'eager'}"></div>`;
  if(g.kind==='motion')return `<div class="gallery-media ${thumb?'thumb':'primary'} motion-preview"><div class="motion-lines"><span></span><span></span><span></span><span></span><span></span></div><div class="motion-center"><div class="motion-play">▶</div><strong>${esc(g.label)}</strong><small>Animated preview · no video file</small></div></div>`;
  return `<div class="gallery-media ${thumb?'thumb':'primary'}">${art({...p,tone:g.tone||p.tone,mockVariant:g.variant},thumb?'small':'large')}</div>`;

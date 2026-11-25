@@ -57,8 +57,8 @@ export function mountVisualEditor(host,file,kind,getOptions,changed){
   const duration=kind==='video'?source.duration:0;
   sourceDetails.textContent=`Original: ${sourceWidth} × ${sourceHeight} px · ${mib(file.size)}${kind==='video'&&Number.isFinite(duration)?` · ${duration.toFixed(1)} s`:''}`;
   budgetDetails.textContent='';
-  if(kind==='video'&&!original){try{const b=videoBudget(file.size,duration,o);budgetDetails.textContent=`Source average: ${b.sourceKbps.toFixed(1)} kbps · Target video: ${b.videoKbps} kbps${o.audio?` + audio ${b.audioKbps} kbps`:''} · Estimated output: ${mib(b.estimatedBytes)} (not guaranteed)`;}catch(e){budgetDetails.textContent=e.message;}}
-  if(original){details.textContent='Output: original dimensions and file size (unchanged)';return;}
+  if(kind==='video'&&!original){try{const b=videoBudget(file.size,duration,o,metrics());budgetDetails.textContent=`Source average: ${b.sourceKbps.toFixed(1)} kbps · Target video: ${b.videoKbps} kbps${o.audio?` + audio ${b.audioKbps} kbps`:''} · Estimated output: ${mib(b.estimatedBytes)} (not guaranteed)`;}catch(e){budgetDetails.textContent=e.message;}}
+  if(original){details.textContent='Output: original dimensions and encoded quality (WebM metadata may be repaired)';return;}
   try{const g=metrics();box.style.inset=`${o.top}% ${o.right}% ${o.bottom}% ${o.left}%`;
    const previewFit=Math.min(1,Math.max(1,Math.min(360,host.clientWidth-32))/g.w,220/g.h);
    const displayWidth=Math.max(1,Math.round(g.outWidth*previewFit)),displayHeight=Math.max(1,Math.round(g.outHeight*previewFit));

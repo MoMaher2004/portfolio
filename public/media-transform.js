@@ -40,21 +40,23 @@ export function geometry(width,height,options={},video=false){
  if(outWidth*outHeight>MAX_IMAGE_PIXELS||Math.max(outWidth,outHeight)>8192)throw Error('Output is too large. Choose smaller output dimensions.');
  return {x,y,w,h,outWidth,outHeight};
 }
-export function defaults(file,formats){const k=mediaKind(file);return {format:k==='image'?(mediaType(file)==='image/gif'?'original':formats.images.includes('image/webp')?'image/webp':formats.images[0]||'original'):k==='video'?formats.videos[0]?.mime||'original':'original',quality:85,scaleX:null,scaleY:null,left:0,top:0,right:0,bottom:0,fps:24,autoBitrate:true,bitrate:1500,audio:formats.videos.length?formats.videos[0].audioSupported!==false:true,audioBitrate:96};}
+export function defaults(file,formats){const k=mediaKind(file);return {format:k==='image'?(mediaType(file)==='image/gif'?'original':formats.images.includes('image/webp')?'image/webp':formats.images[0]||'original'):k==='video'?(ORIGINAL_TYPES.has(mediaType(file))&&file.size<=MAX_UPLOAD?'original':formats.videos[0]?.mime||'original'):'original',quality:85,scaleX:null,scaleY:null,left:0,top:0,right:0,bottom:0,fps:24,autoBitrate:true,bitrate:5000,audio:formats.videos.length?formats.videos[0].audioSupported!==false:true,audioBitrate:96};}
 export function validateOptions(o,kind){if(o.format==='original')return;geometry(1000,1000,o);if(kind==='image'&&(!IMAGE_TYPES.includes(o.format)||!Number.isFinite(+o.quality)||+o.quality<1||+o.quality>100))throw Error('Invalid image encoding settings');if(kind==='video'&&(!VIDEO_FORMATS.some(v=>v.mime===o.format)||(!o.autoBitrate&&(!Number.isFinite(+o.bitrate)||+o.bitrate<100||+o.bitrate>30000))||![15,24,30,60].includes(+o.fps)||![64,96,128,192].includes(+o.audioBitrate)))throw Error('Invalid video encoding settings');}
 export function checkUpload(file, allowed){const type=mediaType(file);if(!ORIGINAL_TYPES.has(type)||(allowed&&!allowed.includes(type)))throw Error('This output format is not supported by the portfolio. Choose a supported conversion format.');if(!file.size)throw Error('Empty file');if(file.size>MAX_UPLOAD)throw Error('Output exceeds the 90 MiB upload limit. Reduce resolution or quality.');return file.type===type?file:new File([file],file.name,{type});}
 
-// File size is the total source bitrate (video, audio and container overhead).
-// Aim below both the source size and upload limit; MediaRecorder rates are targets, not guarantees.
-export function videoBudget(sourceBytes,duration,o){
+// Quality first for text-heavy recordings. A compressed input is not a sensible bitrate cap.
+// Keep an already compatible original whenever possible; conversion is opt-in.
+export function videoBudget(sourceBytes,duration,o,dimensions){
  if(!Number.isFinite(sourceBytes)||sourceBytes<=0||!Number.isFinite(duration)||duration<=0)throw Error('A finite source size and duration are required to estimate bitrate.');
  const sourceKbps=sourceBytes*8/duration/1000;
- let videoKbps=Number(o.bitrate),audioKbps=o.audio?Number(o.audioBitrate):0;
+ let videoKbps=Number(o.bitrate),audioKbps=o.audio?Number(o.audioBitrate)||96:0;
  if(o.autoBitrate){
-  const budget=Math.floor(Math.min(sourceBytes*.80,MAX_UPLOAD*.90)*8/duration/1000);
-  audioKbps=o.audio?Math.min(Number(o.audioBitrate)||96,Math.max(6,Math.floor(budget*.25))):0;
-  videoKbps=Math.min(1500,budget-audioKbps);
-  if(videoKbps<1)throw Error('Source bitrate is too low to compress automatically with these audio settings. Keep original, disable audio, or choose manual bitrate.');
+  const pixels=(dimensions?.outWidth||1280)*(dimensions?.outHeight||720),fps=Number(o.fps)||24;
+  const target=Math.max(500,Math.round(pixels*fps*.16/1000));
+  const minimum=Math.max(200,Math.round(pixels*fps*.09/1000));
+  const available=Math.floor(MAX_UPLOAD*.92*8/duration/1000)-audioKbps;
+  if(available<minimum)throw Error('A readable conversion at these dimensions may exceed 90 MiB. Keep original, reduce output dimensions, or explicitly choose a manual bitrate.');
+  videoKbps=Math.min(30000,available,Math.max(target,Math.min(30000,Math.round(sourceKbps*.95))));
  }
  if(!Number.isFinite(videoKbps)||videoKbps<=0||!Number.isFinite(audioKbps)||audioKbps<0)throw Error('Invalid bitrate settings.');
  const estimatedBytes=(videoKbps+audioKbps)*1000/8*duration;
